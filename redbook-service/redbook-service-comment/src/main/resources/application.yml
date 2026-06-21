@@ -1,0 +1,19 @@
+server:
+  port: 8100
+spring:
+  application:
+    name: redbook-service-comment
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 123.206.101.247:8848
+  data:
+    mongodb:
+      host: 123.206.101.247
+      port: 27017
+      database: redbook
+      username: ${MONGO_USERNAME:root}
+      password: ${MONGO_PASSWORD:your_mongo_password}
+      authentication-database: admin
+
+

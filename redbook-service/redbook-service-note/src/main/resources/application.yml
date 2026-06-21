@@ -1,0 +1,95 @@
+server:
+  port: 8085
+spring:
+  application:
+    name: redbook-service-note
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 123.206.101.247:8848
+  cache:
+    cache-names: noteCache
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=5m
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://121.37.250.15:3306/rb_note?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:your_db_password}
+  rabbitmq:
+    host: 123.206.101.247
+    port: 5672
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:your_rabbitmq_password}
+    virtual-host: /
+  # Kafka 配置
+  kafka:
+    # Kafka 集群地址
+    bootstrap-servers: 123.206.101.247:9092
+    # 消费者相关配置
+    consumer:
+      # 消费者组 ID
+      group-id: redbook-note-consumer
+      # 消费位点策略：latest 表示从最新位置开始
+      auto-offset-reset: latest
+      # 是否自动提交 offset，开启自动提交以减少处理延迟
+      enable-auto-commit: true
+      # Key 反序列化器
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Value 反序列化器
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    # 生产者相关配置
+    producer:
+      # 发送失败重试次数，设置为 0 以追求最快速
+      retries: 0
+      # 应答级别：0 表示不等待 broker 确认
+      acks: 0
+      # Key 序列化器
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Value 序列化器
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    # 监听容器配置
+    listener:
+      # 自动确认模式，减少处理开销
+      ack-mode: RECORD
+  redis:
+    host: 121.37.250.15
+    port: 6379
+    password: ${REDIS_PASSWORD:your_redis_password}
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+  data:
+    mongodb:
+      host: 123.206.101.247
+      port: 27017
+      database: redbook
+      username: ${MONGO_USERNAME:root}
+      password: ${MONGO_PASSWORD:your_mongo_password}
+      authentication-database: admin
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      id-type: auto
+oss:
+  endpoint: oss-cn-beijing.aliyuncs.com
+  accessKeyId: ${OSS_ACCESS_KEY_ID:your-access-key-id}
+  accessKeySecret: ${OSS_ACCESS_KEY_SECRET:your-access-key-secret}
+  bucketName: ${OSS_BUCKET_NAME:your-bucket-name}
+deepseek:
+  api_url: https://api.deepseek.com/v1
+  api_key: ${DEEPSEEK_API_KEY:your-deepseek-api-key}
+map:
+  key: your-gaode-map-key
+geo:
+  distance: 5

@@ -1,0 +1,54 @@
+server:
+  port: 10010
+spring:
+  application:
+    name: redbook-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 123.206.101.247:8848
+    gateway:
+      routes:
+        # 用户服务路由
+        - id: redbook-service-user
+          uri: lb://redbook-service-user
+          predicates:
+            - Path=/user/**
+        # 笔记服务路由
+        - id: redbook-service-note
+          uri: lb://redbook-service-note
+          predicates:
+            - Path=/note/**
+        # 商品服务路由
+        - id: redbook-service-product
+          uri: lb://redbook-service-product
+          predicates:
+            - Path=/product/**
+        # 订单服务路由
+        - id: redbook-service-order
+          uri: lb://redbook-service-order
+          predicates:
+            - Path=/order/**
+        # 评论服务路由
+        - id: redbook-service-comment
+          uri: lb://redbook-service-comment
+          predicates:
+            - Path=/comment/**
+        # 搜索服务路由
+        - id: redbook-service-search
+          uri: lb://redbook-service-search
+          predicates:
+            - Path=/search/**
+        # AI服务路由
+        - id: redbook-service-ai
+          uri: lb://redbook-service-ai
+          predicates:
+            - Path=/ai/**
+        # WebSocket服务路由（使用Nacos服务发现）
+        - id: redbook-netty-websocket
+          uri: lb://redbook-netty-websocket
+          predicates:
+            - Path=/ws/**
+          filters:
+            # WebSocket路径映射：网关 /ws/socket -> 后端 /socket
+            - RewritePath=/ws/(?<segment>.*), /${segment}
