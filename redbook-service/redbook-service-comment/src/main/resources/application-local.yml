@@ -1,0 +1,14 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      username: root
+      password: mongo123

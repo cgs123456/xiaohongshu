@@ -1,0 +1,12 @@
+server:
+  port: 8091
+spring:
+  application:
+    name: redbook-service-ai
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 123.206.101.247:8848
+deepseek:
+  api_url: https://api.deepseek.com/v1
+  api_key: sk-eb8f13a7ddf84eaaaa6b96f451b7aa3f
