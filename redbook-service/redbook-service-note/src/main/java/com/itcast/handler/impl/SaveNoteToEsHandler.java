@@ -3,6 +3,7 @@ package com.itcast.handler.impl;
 import com.itcast.handler.NoteHandler;
 import com.itcast.model.dto.NoteDto;
 import com.itcast.model.pojo.NoteEs;
+import com.itcast.service.EmbeddingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,22 +14,37 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 @Component
-@Order(10)
+@Order(12)
 @Slf4j
 public class SaveNoteToEsHandler extends NoteHandler {
 
     @Autowired
     private ElasticsearchOperations elasticsearchOperations;
 
+    @Autowired
+    private EmbeddingService embeddingService;
+
     @Override
     public void handle(NoteDto noteDto) throws IOException, InterruptedException {
+        NoteEs noteEs = new NoteEs();
+        BeanUtils.copyProperties(noteDto, noteEs);
+
+        // 生成 embedding 向量（失败降级为不写入向量，不阻塞发布）
         try {
-            NoteEs noteEs = new NoteEs();
-            BeanUtils.copyProperties(noteDto, noteEs);
-            elasticsearchOperations.save(noteEs);
+            if (embeddingService.isAvailable()) {
+                String text = (noteDto.getTitle() == null ? "" : noteDto.getTitle()) + " "
+                        + (noteDto.getContent() == null ? "" : noteDto.getContent());
+                float[] embedding = embeddingService.embed(text.trim());
+                if (embedding != null) {
+                    noteEs.setEmbedding(embedding);
+                }
+            }
         } catch (Exception e) {
-            return;
+            log.warn("生成 embedding 失败，降级为无向量写入 noteId={}", noteDto.getId(), e);
         }
+
+        // 写入 ES（失败抛异常触发 Saga 补偿，不再吞异常）
+        elasticsearchOperations.save(noteEs);
     }
 
     @Override

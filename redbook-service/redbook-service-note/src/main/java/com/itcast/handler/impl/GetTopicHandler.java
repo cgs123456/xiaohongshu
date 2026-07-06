@@ -19,7 +19,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
-@Order(6)
+@Order(7)
 @Slf4j
 public class GetTopicHandler extends NoteHandler {
 

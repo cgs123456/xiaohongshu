@@ -1,0 +1,21 @@
+{
+  "properties": {
+    "id": { "type": "integer" },
+    "title": { "type": "text" },
+    "content": { "type": "text" },
+    "image": { "type": "keyword" },
+    "time": { "type": "keyword" },
+    "address": { "type": "text" },
+    "longitude": { "type": "double" },
+    "latitude": { "type": "double" },
+    "userId": { "type": "integer" },
+    "embedding": {
+      "type": "dense_vector",
+      "dims": 1024,
+      "index": true,
+      "similarity": "cosine"
+    },
+    "summary": { "type": "text" },
+    "aiTags": { "type": "keyword" }
+  }
+}

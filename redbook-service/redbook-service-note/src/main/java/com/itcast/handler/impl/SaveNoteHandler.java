@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 @Component
-@Order(7)
+@Order(8)
 @Slf4j
 public class SaveNoteHandler extends NoteHandler {
 

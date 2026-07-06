@@ -40,3 +40,8 @@ mybatis-plus:
     db-config:
       id-type: auto
 
+# Shopping Agent 配置
+agent:
+  # AI 服务 agent/chat 接口地址（通过网关访问）
+  ai-chat-url: ${AGENT_AI_CHAT_URL:http://localhost:10010/ai/agent/chat}
+

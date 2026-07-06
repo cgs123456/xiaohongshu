@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 
 @Component
-@Order(9)
+@Order(10)
 @Slf4j
 public class SaveLocationToRedisHandler extends NoteHandler {
 

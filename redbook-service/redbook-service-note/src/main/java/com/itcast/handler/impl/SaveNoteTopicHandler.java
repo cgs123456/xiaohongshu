@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.util.List;
 
 @Component
-@Order(8)
+@Order(9)
 @Slf4j
 public class SaveNoteTopicHandler extends NoteHandler {
 

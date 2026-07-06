@@ -89,6 +89,13 @@ oss:
 deepseek:
   api_url: https://api.deepseek.com/v1
   api_key: ${DEEPSEEK_API_KEY:your-deepseek-api-key}
+# Embedding 向量化服务（用于 ES 混合检索 dense_vector 生成）
+# 默认禁用，需通过环境变量 EMBEDDING_ENABLED=true 开启
+embedding:
+  enabled: ${EMBEDDING_ENABLED:false}
+  api_url: ${EMBEDDING_API_URL:https://api.openai.com/v1}
+  api_key: ${EMBEDDING_API_KEY:your-embedding-api-key}
+  model: ${EMBEDDING_MODEL:text-embedding-v3}
 map:
   key: your-gaode-map-key
 geo:

@@ -21,6 +21,14 @@ public class AiController {
         return aiService.chat(prompt);
     }
 
+    @PostMapping("/agent/chat")
+    public Result<String> agentChat(@RequestBody com.itcast.model.dto.AgentChatDto request) {
+        if (request.getMessages() == null || request.getMessages().isEmpty()) {
+            return Result.failure("messages 不能为空");
+        }
+        return aiService.agentChat(request);
+    }
+
     public static class ChatRequest {
         private String prompt;
 

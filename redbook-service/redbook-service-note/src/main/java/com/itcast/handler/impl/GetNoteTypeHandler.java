@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-@Order(5)
+@Order(6)
 @Slf4j
 public class GetNoteTypeHandler extends NoteHandler {
 

@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
-@Order(4)
+@Order(5)
 public class FilterTitleHandler extends NoteHandler {
 
     /**

@@ -67,4 +67,14 @@ public class Note implements Serializable {
      * 发布人id
      */
     private Integer userId;
+
+    /**
+     * AI 生成的 50 字摘要（来自 ES，用于搜索结果展示）
+     */
+    private String summary;
+
+    /**
+     * AI 生成的 3 个话题标签（来自 ES）
+     */
+    private java.util.List<String> aiTags;
 }

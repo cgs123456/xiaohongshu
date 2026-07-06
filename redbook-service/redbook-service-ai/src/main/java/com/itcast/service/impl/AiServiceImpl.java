@@ -71,4 +71,54 @@ public class AiServiceImpl implements AiService {
         }
     }
 
+    @Override
+    public Result<String> agentChat(com.itcast.model.dto.AgentChatDto agentChatDto) {
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("model", "deepseek-chat");
+
+        JsonArray messages = new JsonArray();
+        // 如果提供了 systemPrompt，作为第一条 system 消息
+        if (agentChatDto.getSystemPrompt() != null && !agentChatDto.getSystemPrompt().isEmpty()) {
+            JsonObject sysMsg = new JsonObject();
+            sysMsg.addProperty("role", "system");
+            sysMsg.addProperty("content", agentChatDto.getSystemPrompt());
+            messages.add(sysMsg);
+        }
+        // 追加 messages 数组
+        for (com.itcast.model.dto.AgentChatDto.Message msg : agentChatDto.getMessages()) {
+            JsonObject m = new JsonObject();
+            m.addProperty("role", msg.getRole());
+            m.addProperty("content", msg.getContent());
+            messages.add(m);
+        }
+        requestBody.add("messages", messages);
+
+        RequestBody body = RequestBody.create(
+                requestBody.toString(),
+                MediaType.parse("application/json; charset=utf-8")
+        );
+
+        Request request = new Request.Builder()
+                .url(apiUrl + "/chat/completions")
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                return Result.failure("DeepSeek API 调用失败: " + response.code());
+            }
+            String responseBody = response.body() != null ? response.body().string() : "";
+            JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
+            JsonArray choices = jsonResponse.getAsJsonArray("choices");
+            String content = choices.get(0).getAsJsonObject()
+                    .getAsJsonObject("message")
+                    .get("content").getAsString();
+            return Result.success(content);
+        } catch (IOException e) {
+            return Result.failure("DeepSeek API 调用异常: " + e.getMessage());
+        }
+    }
+
 }

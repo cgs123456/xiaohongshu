@@ -1,6 +1,7 @@
 package com.itcast.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.itcast.agent.ShoppingAgentService;
 import com.itcast.constant.MqConstant;
 import com.itcast.constant.RedisConstant;
 import com.itcast.context.UserContext;
@@ -15,7 +16,6 @@ import com.itcast.model.pojo.Shop;
 import com.itcast.model.vo.ProductVo;
 import com.itcast.result.Result;
 import com.itcast.service.ProductService;
-import com.itcast.util.HttpUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -58,6 +58,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Autowired
     private RedissonClient redissonClient;
+
+    @Autowired
+    private ShoppingAgentService shoppingAgentService;
 
     @Override
     public Result<List<Product>> getProductList() {
@@ -191,20 +194,45 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Result<String> buyProduct(String message) {
+        // 旧接口：单轮购物咨询（无对话上下文），委托给 ShoppingAgentService
         try {
-            // 获取当前用户 ID
-            Integer userId = UserContext.getUserId();
-            
-            // 调用 Agent 聊天接口，在请求头中传递 userId
-            String url = "http://localhost:9999/agent/chat";
-            String response = HttpUtil.postWithUserId(url, message, userId);
-            
-            log.info("用户 {} 的购买咨询: {}, AI回复: {}", userId, message, response);
-            return Result.success(response);
+            log.info("用户 {} 购物咨询: {}", UserContext.getUserId(), message);
+            String reply = shoppingAgentService.chat(null, message);
+            return Result.success(reply);
         } catch (Exception e) {
-            log.error("调用 Agent 服务失败", e);
-            return Result.failure("调用 Agent 服务失败");
+            log.error("Agent 处理失败", e);
+            return Result.failure("Agent 处理失败：" + e.getMessage());
         }
+    }
+
+    @Override
+    public Result<String> agentChat(String conversationId, String message) {
+        // 新接口：支持多轮对话（前端传入 conversationId 维持上下文）
+        try {
+            log.info("用户 {} 多轮对话 conversationId={} message={}",
+                    UserContext.getUserId(), conversationId, message);
+            String reply = shoppingAgentService.chat(conversationId, message);
+            return Result.success(reply);
+        } catch (Exception e) {
+            log.error("Agent 处理失败", e);
+            return Result.failure("Agent 处理失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<List<Product>> searchProducts(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            // 无关键词时返回全部商品（最多 20 条）
+            LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
+            wrapper.last("LIMIT 20");
+            return Result.success(productMapper.selectList(wrapper));
+        }
+        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(Product::getName, keyword)
+               .or().like(Product::getDescription, keyword)
+               .or().like(Product::getBrand, keyword)
+               .last("LIMIT 20");
+        return Result.success(productMapper.selectList(wrapper));
     }
 
     @Override

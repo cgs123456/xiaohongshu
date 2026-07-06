@@ -57,6 +57,28 @@ public class ProductController {
         return productService.buyProduct(message);
     }
 
+    /**
+     * 购物 Agent 多轮对话端点（支持 conversationId 维持上下文）
+     * 请求体示例：{"conversationId":"abc123","message":"帮我买那个红色的"}
+     */
+    @PostMapping("/agent/chat")
+    public Result<String> agentChat(@RequestBody AgentChatRequest request) {
+        if (request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+            return Result.failure("message 不能为空");
+        }
+        return productService.agentChat(request.getConversationId(), request.getMessage());
+    }
+
+    public static class AgentChatRequest {
+        private String conversationId;
+        private String message;
+
+        public String getConversationId() { return conversationId; }
+        public void setConversationId(String conversationId) { this.conversationId = conversationId; }
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+    }
+
     @GetMapping("/helper/buyProduct")
     public Result<Void> helperBuyProduct(@RequestParam Integer productId) {
         if (productId == null) {
