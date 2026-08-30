@@ -17,6 +17,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         log.info("注册自定义拦截器");
         registry.addInterceptor(new BaseInterceptor())
                 .addPathPatterns("/**")
-                .excludePathPatterns("/user/send/**", "/user/verify");
+                // 只放行评论模块真实公开的查询接口，发评论仍需登录
+                .excludePathPatterns("/comment/getCommentList/**", "/comment/getCommentCount/**");
     }
 }

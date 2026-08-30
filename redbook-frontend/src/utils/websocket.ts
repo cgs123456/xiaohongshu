@@ -10,11 +10,13 @@ class WebSocketManager {
     private heartbeatTimer: number | null = null
     private heartbeatTimeoutTimer: number | null = null
     private reconnectAttempts: number = 0
-    private maxReconnectAttempts: number = 5
-    private reconnectInterval: number = 3000
+    private maxReconnectAttempts: number = 8
+    private baseReconnectInterval: number = 3000
+    private maxReconnectInterval: number = 30000
     private heartbeatInterval: number = 30000
     private heartbeatTimeout: number = 5000
     private isManualClose: boolean = false
+    private isRetrying: boolean = false
     private isWaitingPong: boolean = false
     private messageHandlers: Set<(data: unknown) => void> = new Set()
     private statusHandlers: Set<(connected: boolean) => void> = new Set()
@@ -25,9 +27,6 @@ class WebSocketManager {
 
         // 监听页面可见性变化
         document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this))
-
-        // 页面卸载前保存状态
-        window.addEventListener('beforeunload', this.handleBeforeUnload.bind(this))
     }
 
     /**
@@ -41,6 +40,14 @@ class WebSocketManager {
      * 连接 WebSocket
      */
     connect(): void {
+        // 主动发起连接时重置手动关闭标记和重试计数
+        // （重连定时器触发时 isRetrying 为 true，保留退避计数）
+        this.isManualClose = false
+        if (!this.isRetrying) {
+            this.reconnectAttempts = 0
+        }
+        this.isRetrying = false
+
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             return
         }
@@ -191,7 +198,7 @@ class WebSocketManager {
     }
 
     /**
-     * 重连
+     * 重连（指数退避：delay = min(3000 * 2^attempts, 30000)，最多 8 次）
      */
     private reconnect(): void {
         if (this.reconnectTimer || this.isManualClose) {
@@ -202,12 +209,14 @@ class WebSocketManager {
             return
         }
 
+        const delay = Math.min(this.baseReconnectInterval * 2 ** this.reconnectAttempts, this.maxReconnectInterval)
         this.reconnectAttempts++
+        this.isRetrying = true
 
         this.reconnectTimer = window.setTimeout(() => {
             this.reconnectTimer = null
             this.connect()
-        }, this.reconnectInterval)
+        }, delay)
     }
 
     /**
@@ -222,13 +231,6 @@ class WebSocketManager {
                 this.connect()
             }
         }
-    }
-
-    /**
-     * 处理页面卸载前事件
-     */
-    private handleBeforeUnload(): void {
-        // 页面刷新时不标记为手动关闭，以便重连
     }
 
     /**

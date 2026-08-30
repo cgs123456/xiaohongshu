@@ -1,6 +1,7 @@
 package com.itcast.config;
 
 import com.itcast.constant.MqConstant;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -10,8 +11,16 @@ import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
 
+@Slf4j
 @Configuration
 public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.ReturnsCallback {
+
+    /** save.order 队列的死信交换机（消费失败超过重试次数的消息进入） */
+    public static final String SAVE_ORDER_DEAD_LETTER_EXCHANGE = "save.order.dead.exchange";
+    /** save.order 队列的死信路由键 */
+    public static final String SAVE_ORDER_DEAD_LETTER_KEY = "save.order.dead.key";
+    /** save.order 队列的死信队列 */
+    public static final String SAVE_ORDER_DEAD_LETTER_QUEUE = "save.order.dead.queue";
 
     @Autowired
     private RabbitTemplate rabbitTemplate;
@@ -33,11 +42,9 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
      */
     @Override
     public void returnedMessage(ReturnedMessage returned) {
-        System.out.println("交换器 : " + returned.getExchange());
-        System.out.println("路由键 : " + returned.getRoutingKey());
-        System.out.println("路由失败编码 : " + returned.getReplyCode());
-        System.out.println("路由失败描述 : " + returned.getReplyText());
-        System.out.println("消息 : " + returned.getMessage());
+        log.error("消息路由失败，交换器 : {}，路由键 : {}，路由失败编码 : {}，路由失败描述 : {}，消息 : {}",
+                returned.getExchange(), returned.getRoutingKey(),
+                returned.getReplyCode(), returned.getReplyText(), returned.getMessage());
     }
 
     /**
@@ -48,9 +55,9 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
      */
     @Override
     public void confirm(CorrelationData correlationData, boolean ack, String cause) {
-        System.out.println("消息唯一标记 : " + correlationData);
-        System.out.println("是否确认到达交换器 : " + ack);
-        System.out.println("不能到达交换器的原因 : " + cause);
+        if (!ack) {
+            log.error("消息未到达交换器，消息唯一标记 : {}，原因 : {}", correlationData, cause);
+        }
     }
 
     // 声明交换机
@@ -59,16 +66,39 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
         return new DirectExchange(MqConstant.SAVE_ORDER_EXCHANGE);
     }
 
-    // 声明队列
+    // 声明队列（带死信参数：消费失败超过重试次数的消息经死信路由进入 save.order.dead.queue）
     @Bean
     public Queue saveOrderQueue() {
-        return new Queue(MqConstant.SAVE_ORDER_QUEUE);
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", SAVE_ORDER_DEAD_LETTER_EXCHANGE);
+        args.put("x-dead-letter-routing-key", SAVE_ORDER_DEAD_LETTER_KEY);
+        return new Queue(MqConstant.SAVE_ORDER_QUEUE, true, false, false, args);
     }
 
     // 使用routing key将队列绑定到交换机
     @Bean
     public Binding binding(Queue saveOrderQueue, DirectExchange saveOrderExchange) {
         return BindingBuilder.bind(saveOrderQueue).to(saveOrderExchange).with("");
+    }
+
+    // 死信交换机
+    @Bean
+    public DirectExchange saveOrderDeadLetterExchange() {
+        return new DirectExchange(SAVE_ORDER_DEAD_LETTER_EXCHANGE);
+    }
+
+    // 死信队列
+    @Bean
+    public Queue saveOrderDeadLetterQueue() {
+        return QueueBuilder.durable(SAVE_ORDER_DEAD_LETTER_QUEUE).build();
+    }
+
+    // 死信队列绑定
+    @Bean
+    public Binding saveOrderDeadLetterBinding() {
+        return BindingBuilder.bind(saveOrderDeadLetterQueue())
+                .to(saveOrderDeadLetterExchange())
+                .with(SAVE_ORDER_DEAD_LETTER_KEY);
     }
 
 }

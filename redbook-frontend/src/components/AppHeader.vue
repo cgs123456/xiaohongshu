@@ -26,41 +26,37 @@
           </button>
           
           <!-- 未登录状态 -->
-          <button v-if="!userInfo" class="action-btn login-btn-header" @click="showLoginModal = true">
+          <button v-if="!userStore.isLoggedIn" class="action-btn login-btn-header" @click="showLoginModal = true">
             登录/注册
           </button>
-          
+
           <!-- 已登录状态 -->
           <div v-else class="user-menu">
-            <img 
-              :src="userInfo.image || 'https://i.pravatar.cc/150?img=1'" 
-              :alt="userInfo.nickname || '用户'"
+            <img
+              :src="userStore.state.userInfo?.image || 'https://i.pravatar.cc/150?img=1'"
+              :alt="userStore.state.userInfo?.nickname || '用户'"
               class="user-avatar"
               @click="toggleUserMenu"
             />
-            
+
             <!-- 用户下拉菜单 -->
             <Transition name="dropdown">
               <div v-if="showUserMenu" class="user-dropdown" @click.stop>
                 <div class="user-info-section">
-                  <img 
-                    :src="userInfo.image || 'https://i.pravatar.cc/150?img=1'" 
-                    :alt="userInfo.nickname || '用户'"
+                  <img
+                    :src="userStore.state.userInfo?.image || 'https://i.pravatar.cc/150?img=1'"
+                    :alt="userStore.state.userInfo?.nickname || '用户'"
                     class="dropdown-avatar"
                   />
                   <div class="user-details">
-                    <div class="user-nickname">{{ userInfo.nickname || userInfo.username || '用户' }}</div>
-                    <div class="user-id">ID: {{ userInfo.number || userInfo.id }}</div>
+                    <div class="user-nickname">{{ userStore.state.userInfo?.nickname || userStore.state.userInfo?.username || '用户' }}</div>
+                    <div class="user-id">ID: {{ userStore.state.userInfo?.number || userStore.state.userInfo?.id }}</div>
                   </div>
                 </div>
                 <div class="menu-divider"></div>
                 <button class="menu-item" @click="goToProfile">
                   <Icon icon="mdi:account" width="18" />
                   <span>个人主页</span>
-                </button>
-                <button class="menu-item" @click="goToSettings">
-                  <Icon icon="mdi:cog" width="18" />
-                  <span>设置</span>
                 </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item logout-item" @click="handleLogout">
@@ -96,37 +92,29 @@ import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
 import CreateNoteModal from './CreateNoteModal.vue'
 import LoginModal from './LoginModal.vue'
-import { getUserInfo, type UserVo } from '../api/auth'
-import { websocketManager } from '../utils/websocket'
+import { getUserInfo } from '../api/auth'
+import { useUserStore } from '../stores/user'
+import { useToast } from '../composables/useToast'
 
 const router = useRouter()
+const userStore = useUserStore()
+const { showToast } = useToast()
 const showCreateModal = ref(false)
 const showLoginModal = ref(false)
-const userInfo = ref<UserVo | null>(null)
 const showUserMenu = ref(false)
 const searchKeyword = ref('')
 
-// 加载用户信息
+// 补充加载用户信息（store 中尚无 userInfo 时）
 const loadUserInfo = async () => {
-  const token = localStorage.getItem('token')
-  if (!token) {
-    userInfo.value = null
-    return
-  }
-  
+  if (!userStore.isLoggedIn || userStore.state.userInfo) return
+
   try {
     const response = await getUserInfo()
-    if (response.code === 200 && response.data && response.data.user) {
-      userInfo.value = response.data.user
-    } else {
-      // token 无效，清除
-      localStorage.removeItem('token')
-      userInfo.value = null
+    if (response.data && response.data.user) {
+      userStore.setUserInfo(response.data.user)
     }
   } catch (error) {
-    // 获取用户信息失败
-    localStorage.removeItem('token')
-    userInfo.value = null
+    // 获取用户信息失败（401 会由拦截器统一处理）
   }
 }
 
@@ -143,9 +131,8 @@ const handleClickOutside = (event: MouseEvent) => {
   }
 }
 
-// 登录成功回调
+// 登录成功回调（LoginModal 已写入 store 并连接 WebSocket）
 const handleLoginSuccess = () => {
-  // 重新加载用户信息
   loadUserInfo()
 }
 
@@ -155,19 +142,10 @@ const goToProfile = () => {
   router.push('/profile')
 }
 
-// 跳转到设置
-const goToSettings = () => {
-  showUserMenu.value = false
-  router.push('/settings')
-}
-
 // 退出登录
 const handleLogout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('token_expiry')
-  userInfo.value = null
+  userStore.logout()
   showUserMenu.value = false
-  websocketManager.close()
   router.push('/')
 }
 
@@ -179,22 +157,29 @@ const goHome = () => {
 const handleSearch = () => {
   const keyword = searchKeyword.value.trim()
   if (keyword) {
-    router.push({ path: '/search', query: { keyword } })
+    showToast('搜索功能开发中，敬请期待', 'info')
   }
 }
 
+// 发布成功：通知页面刷新列表（不再整页 reload）
 const handleCreateSuccess = () => {
-  // 发布成功后刷新页面
-  window.location.reload()
+  window.dispatchEvent(new CustomEvent('note:published'))
+}
+
+// 401/登录过期时由拦截器派发该事件，打开登录弹窗
+const handleAuthRequired = () => {
+  showLoginModal.value = true
 }
 
 onMounted(() => {
   loadUserInfo()
   document.addEventListener('click', handleClickOutside)
+  window.addEventListener('auth:required', handleAuthRequired)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('auth:required', handleAuthRequired)
 })
 </script>
 

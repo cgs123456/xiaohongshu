@@ -14,7 +14,7 @@ export interface Comment {
     userId: number
     content: string
     time: string
-    parentId?: number | null
+    parentId?: string | null
 }
 
 export interface CommentVo {

@@ -31,6 +31,11 @@ public class OrderDto implements Serializable {
     private Integer userId;
 
     /**
+     * 购买数量（默认1）
+     */
+    private Integer quantity;
+
+    /**
      * 消息唯一标识（用于幂等性控制）
      */
     private String messageId;

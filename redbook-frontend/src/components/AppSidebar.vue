@@ -1,35 +1,43 @@
 <template>
   <aside class="sidebar">
     <div class="sidebar-nav">
-      <div 
-        class="nav-item" 
+      <div
+        class="nav-item"
         :class="{ active: currentRoute === '/' }"
         @click="navigateTo('/')"
       >
         <Icon icon="mdi:compass" class="nav-icon" width="24" />
         <span class="nav-text">发现</span>
       </div>
-      <div class="nav-item">
-        <Icon icon="mdi:account-group" class="nav-icon" width="24" />
-        <span class="nav-text">关注</span>
-      </div>
-      <div 
-        class="nav-item" 
+      <div
+        class="nav-item"
         :class="{ active: currentRoute === '/shopping' }"
         @click="navigateTo('/shopping')"
       >
         <Icon icon="mdi:shopping" class="nav-icon" width="24" />
         <span class="nav-text">购物</span>
       </div>
-      <div 
-        class="nav-item" 
+      <div
+        class="nav-item"
+        :class="{ active: currentRoute === '/cart' }"
+        @click="navigateTo('/cart')"
+      >
+        <Icon icon="mdi:cart-outline" class="nav-icon" width="24" />
+        <span class="nav-text">购物车</span>
+      </div>
+      <div
+        class="nav-item"
         :class="{ active: currentRoute === '/notifications' }"
         @click="navigateTo('/notifications')"
       >
         <Icon icon="mdi:bell-outline" class="nav-icon" width="24" />
         <span class="nav-text">通知</span>
       </div>
-      <div class="nav-item" @click="handleHistoryClick">
+      <div
+        class="nav-item"
+        :class="{ active: currentRoute === '/profile' }"
+        @click="navigateTo('/profile')"
+      >
         <Icon icon="mdi:clock-outline" class="nav-icon" width="24" />
         <span class="nav-text">历史</span>
       </div>
@@ -49,10 +57,6 @@ const currentRoute = computed(() => route.path)
 
 const navigateTo = (path: string) => {
   router.push(path)
-}
-
-const handleHistoryClick = () => {
-  navigateTo('/history')
 }
 </script>
 

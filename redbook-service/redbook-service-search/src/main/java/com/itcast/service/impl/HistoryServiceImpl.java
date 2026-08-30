@@ -20,6 +20,9 @@ public class HistoryServiceImpl implements HistoryService {
     @Override
     public Result<List<History>> getHistoryList() {
         Integer userId = UserContext.getUserId();
+        if (userId == null) {
+            return Result.failure("用户未登录");
+        }
         LambdaQueryWrapper<History> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(History::getUserId, userId);
         List<History> historyList = historyMapper.selectList(queryWrapper);

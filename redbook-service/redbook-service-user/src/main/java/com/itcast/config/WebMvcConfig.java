@@ -17,6 +17,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         log.info("注册自定义拦截器");
         registry.addInterceptor(new BaseInterceptor())
                 .addPathPatterns("/**")
-                .excludePathPatterns("/user/send/**", "/user/verify");
+                // 登录相关接口已改为 POST + JSON body
+                .excludePathPatterns("/user/send", "/user/verify");
     }
 }

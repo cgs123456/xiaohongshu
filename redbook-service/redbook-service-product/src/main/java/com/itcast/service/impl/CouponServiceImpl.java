@@ -13,6 +13,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +55,7 @@ public class CouponServiceImpl implements CouponService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Result<Void> useCoupon(Long couponId) {
         useCoupon(couponId, UserContext.getUserId());
         return Result.success(null);
@@ -63,23 +65,23 @@ public class CouponServiceImpl implements CouponService {
         RLock lock = redissonClient.getLock("useCoupon:" + couponId);
         boolean res = false;
         try {
-            res = lock.tryLock(100, TimeUnit.SECONDS);
-            if (res) {
-                // 获取数据库优惠券的库存
-                Coupon coupon = couponMapper.selectById(couponId);
-                Integer stock = coupon.getStock();
-                if (stock > 0) {
-                    log.info("扣减库存...");
-                    coupon.setStock(stock - 1);
-                    couponMapper.updateById(coupon);
-                } else {
-                    // 库存不足时返回失败结果
-                    throw new RuntimeException("优惠券库存不足");
-                }
-            } else {
+            res = lock.tryLock(3, TimeUnit.SECONDS);
+            if (!res) {
                 // 获取锁失败时返回失败结果
                 throw new RuntimeException("获取优惠券锁失败，请稍后重试");
             }
+            // 1.条件更新 rb_user_coupon：仅当用户持有且未使用时核销，影响行数为0表示不满足条件
+            int updated = userCouponMapper.markUsed(userId, couponId.intValue());
+            if (updated == 0) {
+                throw new RuntimeException("优惠券不存在、已使用或不可用");
+            }
+            // 2.原子扣减 rb_coupon 库存（条件 UPDATE，影响行数为0表示库存不足，事务回滚）
+            int rows = couponMapper.deductStock(couponId);
+            if (rows == 0) {
+                log.error("优惠券库存不足，couponId={} userId={}", couponId, userId);
+                throw new RuntimeException("优惠券库存不足");
+            }
+            log.info("优惠券使用成功，couponId={} userId={}", couponId, userId);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("获取锁时发生异常", e);

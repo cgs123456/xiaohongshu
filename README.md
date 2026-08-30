@@ -58,31 +58,33 @@ my-redbook/
 
 ### 用户模块
 
-- 手机号 + 验证码登录
-- JWT 身份认证（Token 过期自动清除）
-- 用户信息编辑、头像上传（Aliyun OSS）
-- 关注 / 取消关注
+- 手机号 + 验证码登录（6 位码、60s 发送间隔、每日限额、原子校验防并发复用、5 次失败锁定）
+- JWT 身份认证（Token 过期自动清除，密钥走环境变量）
+- 用户信息编辑、头像上传（Aliyun OSS，客户端单例复用）
+- 关注 / 取消关注（Redis Set + 唯一键幂等）
+- 批量用户查询接口 `/user/getUserByIds`（供各服务消除 N+1）
 
 ### 笔记模块
 
 - 笔记发布（图文、话题标签）
-- 笔记浏览（多种策略：推荐、关注、收藏、点赞、浏览、同城）
-- 点赞 / 收藏（数据库原子操作，防并发）
-- 评论系统
-- 敏感词过滤、布隆过滤器
+- 笔记浏览（多种策略：推荐、关注、收藏、点赞、浏览、同城，均支持分页 + 批量查询）
+- 点赞 / 收藏（唯一键幂等 + 计数条件更新，Redis/MQ 操作事务提交后执行）
+- 评论系统（MongoDB 存储，批量组装用户信息）
+- 敏感词过滤（内存缓存 + 定时刷新）、布隆过滤器（防重复推荐）
 
 ### 商品模块
 
-- 商品列表 / 详情
-- 购物车管理（增删改查、库存校验）
-- 优惠券系统
-- 立即购买（Redis 库存预热 + Lua 脚本原子扣减）
+- 商品列表 / 详情（支持分页）
+- 购物车管理（前端完整页面：增删改查、数量校验、合计）
+- 优惠券系统（核销校验持券状态 + 条件更新防重复刷券）
+- 立即购买（Redis 库存预热 + Lua 脚本原子扣减，数量全链路透传）
 
 ### 订单模块
 
 - 下单流程（Saga 分布式事务）
-- 异步下单（RabbitMQ 消息队列）
-- 订单管理
+- 异步下单（RabbitMQ 消息队列，UUID messageId 幂等 + 重试上限 + 死信队列）
+- **订单超时关单**：15 分钟延迟消息（死信队列方案）自动取消待支付订单并回补 Redis/MySQL 库存，定时任务兜底扫描
+- 订单管理（分页查询）
 
 ### 搜索模块
 
@@ -93,9 +95,10 @@ my-redbook/
 
 ### 消息模块
 
-- Netty WebSocket 实时推送
+- Netty WebSocket 实时推送（IdleStateHandler 心跳踢死链）
 - 点赞 / 收藏 / 关注 / 评论通知
-- 心跳保活、断线重连
+- **离线消息补发**：用户不在线时通知落 Redis（7 天），上线自动补发
+- 心跳保活、断线重连（前端指数退避，最多 8 次）
 
 ### AI 模块
 
@@ -279,7 +282,7 @@ npm run dev
 | 订单服务         | 8105  |
 | 评论服务         | 8100  |
 | 搜索服务         | 8090  |
-| 消息服务 (Netty) | 8889  |
+| 消息服务 (Netty) | 8889（HTTP）/ 8888（WebSocket） |
 | AI 服务        | 8091  |
 | 前端 (Vite)    | 5173  |
 
@@ -292,9 +295,41 @@ npm run dev
 | `/user/**`    | 用户服务             |
 | `/note/**`    | 笔记服务             |
 | `/product/**` | 商品服务             |
+| `/cart/**`    | 商品服务（购物车）        |
 | `/order/**`   | 订单服务             |
 | `/comment/**` | 评论服务             |
 | `/search/**`  | 搜索服务             |
 | `/ai/**`      | AI 服务            |
 | `/ws/**`      | 消息服务 (WebSocket) |
 
+购买与搜索接口配置了 Redis 令牌桶限流（replenishRate=10 / burstCapacity=20，按 IP+路径）。
+
+
+## 环境变量配置
+
+安全相关配置已全部环境变量化，未配置时使用本地开发默认值（localhost + 弱密码），生产环境必须显式配置：
+
+| 环境变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `JWT_SECRET_KEY` | JWT 签名密钥（≥32字符）。**未配置时每次重启随机生成，所有 token 失效** | 随机 |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key（原 key 已从代码移除，如曾泄露请去后台吊销） | 无 |
+| `NACOS_ADDR` | Nacos 注册中心地址 | `localhost:8848` |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_PASSWORD` | MySQL 连接 | `localhost` / `3306` / 代码内默认 |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis 连接 | `localhost` / `6379` / 代码内默认 |
+| `RABBITMQ_HOST` / `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | RabbitMQ 连接 | `localhost` / `admin` / 代码内默认 |
+| `MONGO_URI`（comment 服务）或 `MONGO_HOST`/`MONGO_PORT` | MongoDB 连接 | `localhost` |
+| `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` / `OSS_BUCKET_NAME` | 阿里云 OSS | 无 |
+
+各服务也支持 `local` profile（`application-local.yml`）覆盖本地连接信息。
+
+## 数据库初始化
+
+`docker/init-sql/` 下的脚本已与 Java 实体逐字段对齐，并包含全部唯一键/索引与种子数据（2 个测试用户：13800000001 / 13800000002；10 个商品，分类为美妆/服饰/食品/数码/家居；3 张优惠券）。`docker compose up -d` 启动基础设施后脚本自动执行。
+
+## 已知设计约定
+
+- 订单只能通过 `POST /product/buyProduct`（Redis Lua 预扣库存 → MQ → MySQL 原子扣减）创建，待支付订单 15 分钟后由延迟消息自动关单并回补库存，另有定时任务兜底；
+- 网关统一注入 `userId` 请求头并剥离客户端伪造的同名头，下游服务从请求头读取用户身份；
+- Feign 调用统一配置了超时（connect 2s / read 5s），笔记服务的评论/用户调用配置了 fallback 降级；
+- 短信通道未接入，验证码在用户服务日志中以打码手机号形式输出（仅供联调，生产必须接入短信后移除）；
+- 测试账号：13800000001 / 13800000002（配合日志中的验证码登录）。

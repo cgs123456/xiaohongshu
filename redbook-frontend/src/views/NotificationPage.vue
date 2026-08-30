@@ -120,6 +120,7 @@ import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getLikeList, type LikeVo } from '@/api/note'
+import { withThumb } from '@/utils/image'
 
 interface Notification {
   id: string
@@ -146,33 +147,36 @@ const notifications = ref<Notification[]>([])
 // 使用 WebSocket
 const { isConnected, onMessage } = useWebSocket()
 
+// 安全解析日期字符串（兼容 Safari 不支持的 "yyyy-MM-dd HH:mm:ss" 格式）
+const parseDate = (value: unknown): Date | null => {
+  if (value instanceof Date) return value
+  if (typeof value === 'number') return new Date(value)
+  if (typeof value === 'string') {
+    const date = new Date(value.replace(' ', 'T'))
+    return isNaN(date.getTime()) ? null : date
+  }
+  return null
+}
+
 // 格式化时间
 const formatTime = (timestamp?: number | string | Date): string => {
-  if (!timestamp) {
+  const date = parseDate(timestamp)
+  if (!date) {
     return '刚刚'
   }
-  
-  let date: Date
-  if (typeof timestamp === 'string') {
-    date = new Date(timestamp)
-  } else if (typeof timestamp === 'number') {
-    date = new Date(timestamp)
-  } else {
-    date = timestamp
-  }
-  
+
   const now = Date.now()
   const diff = now - date.getTime()
   const seconds = Math.floor(diff / 1000)
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
   const days = Math.floor(hours / 24)
-  
+
   if (seconds < 60) return '刚刚'
   if (minutes < 60) return `${minutes}分钟前`
   if (hours < 24) return `${hours}小时前`
   if (days < 7) return `${days}天前`
-  
+
   return `${date.getMonth() + 1}-${date.getDate()}`
 }
 
@@ -180,22 +184,20 @@ const formatTime = (timestamp?: number | string | Date): string => {
 const fetchLikeList = async () => {
   try {
     const response = await getLikeList()
-    if (response.code === 200 && response.data) {
-      // 将后端数据转换为前端通知格式
-      const likeNotifications: Notification[] = response.data.map((item: LikeVo) => ({
-        id: String(item.like.id),
-        type: 'like',
-        avatar: item.user?.image || 'https://i.pravatar.cc/150?img=1',
-        username: item.user?.nickname || item.user?.username || '未知用户',
-        time: formatTime(item.like.createTime),
-        content: '赞了你的笔记',
-        noteTitle: item.note?.title || item.note?.content?.substring(0, 20) || '无标题',
-        noteImage: item.note?.image?.split(',')[0] || ''
-      }))
-      
-      // 合并到通知列表
-      notifications.value = [...likeNotifications, ...notifications.value]
-    }
+    // 将后端数据转换为前端通知格式
+    const likeNotifications: Notification[] = (response.data || []).map((item: LikeVo) => ({
+      id: String(item.like.id),
+      type: 'like',
+      avatar: item.user?.image || 'https://i.pravatar.cc/150?img=1',
+      username: item.user?.nickname || item.user?.username || '未知用户',
+      time: formatTime(item.like.createTime),
+      content: '赞了你的笔记',
+      noteTitle: item.note?.title || item.note?.content?.substring(0, 20) || '无标题',
+      noteImage: withThumb(item.note?.image?.split(',')[0], 200)
+    }))
+
+    // 合并到通知列表
+    notifications.value = [...likeNotifications, ...notifications.value]
   } catch (error) {
     // 获取点赞列表失败
   }
@@ -226,10 +228,15 @@ const formatTimeFromTimestamp = (timestamp?: number): string => {
 // 处理接收到的 WebSocket 消息
 const handleWebSocketMessage = (data: unknown) => {
   try {
+    // 简单类型守卫，替代 as Record<string, any> 双重断言
+    const isRecord = (v: unknown): v is Record<string, any> =>
+      typeof v === 'object' && v !== null
+    if (!isRecord(data)) return
+    const msgData = data
+
     // 后端格式：{ type: 0, noticeId: 3, obj: { like, note, user } }
-    const msgData = data as Record<string, any>
     if (msgData.type !== undefined && msgData.noticeId && msgData.obj) {
-      const obj = msgData.obj as Record<string, any>
+      const obj = isRecord(msgData.obj) ? msgData.obj : {}
       let notificationType = ''
       let content = ''
       let avatar = ''
@@ -246,7 +253,7 @@ const handleWebSocketMessage = (data: unknown) => {
         avatar = obj.user.image || 'https://i.pravatar.cc/150?img=10'
         username = obj.user.nickname || obj.user.phone || '未知用户'
         noteTitle = obj.note.title || obj.note.content?.substring(0, 20) || '无标题'
-        noteImage = obj.note.image?.split(',')[0] || ''
+        noteImage = withThumb(obj.note.image?.split(',')[0], 200)
         notificationId = String(obj.like.id)
         createTime = obj.like.createTime
       }
@@ -257,7 +264,7 @@ const handleWebSocketMessage = (data: unknown) => {
         avatar = obj.user.image || 'https://i.pravatar.cc/150?img=10'
         username = obj.user.nickname || obj.user.phone || '未知用户'
         noteTitle = obj.note.title || obj.note.content?.substring(0, 20) || '无标题'
-        noteImage = obj.note.image?.split(',')[0] || ''
+        noteImage = withThumb(obj.note.image?.split(',')[0], 200)
         notificationId = String(obj.collection.id)
         createTime = obj.collection.createTime
       }
@@ -385,13 +392,11 @@ onMounted(() => {
 })
 
 const filteredNotifications = computed(() => {
-  // 可以根据 activeTab 来过滤通知
+  // tab 过滤：'system' 赞和收藏；'mention' 新增关注；'all' 显示全部类型（含评论/@）
   if (activeTab.value === 'system') {
     return notifications.value.filter(n => n.type === 'like' || n.type === 'collect')
   } else if (activeTab.value === 'mention') {
     return notifications.value.filter(n => n.type === 'follow')
-  } else if (activeTab.value === 'all') {
-    return notifications.value.filter(n => n.type === 'comment')
   }
   return notifications.value
 })

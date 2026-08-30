@@ -18,6 +18,6 @@ public interface NoteScanMapper extends BaseMapper<NoteBrowse> {
 
     @Select("SELECT n.* FROM rb_note n " +
             "INNER JOIN rb_note_browse nb ON n.id = nb.note_id " +
-            "WHERE nb.user_id = #{userId} AND n.user_id = #{userId}")
+            "WHERE nb.user_id = #{userId}")
     List<Note> selectNotesByUserId(@Param("userId") Integer userId);
 }

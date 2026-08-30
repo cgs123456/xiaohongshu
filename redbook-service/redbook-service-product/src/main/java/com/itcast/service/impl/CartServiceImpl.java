@@ -34,6 +34,10 @@ public class CartServiceImpl implements CartService {
         if (userId == null) {
             return Result.failure("用户未登录");
         }
+        // 数量校验：1<=quantity<=999，越界抛业务异常
+        if (quantity == null || quantity < 1 || quantity > 999) {
+            throw new RuntimeException("购买数量必须在1-999之间");
+        }
 
         // 检查商品是否存在
         Product product = productMapper.selectById(productId);

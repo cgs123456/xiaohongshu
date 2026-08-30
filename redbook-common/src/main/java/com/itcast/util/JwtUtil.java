@@ -2,18 +2,41 @@ package com.itcast.util;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import java.security.SecureRandom;
 import java.util.Date;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * jwt工具类
  */
 public class JwtUtil {
-    // 从环境变量读取密钥，如果未配置则使用安全的默认密钥（64字符随机字符串）
-    private static final String SECRET_KEY = System.getenv("JWT_SECRET_KEY") != null 
-        ? System.getenv("JWT_SECRET_KEY") 
-        : "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6A1B2C3D4E5F6";
+    private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
+
+    /**
+     * 优先读取环境变量 JWT_SECRET_KEY；未配置时每次启动生成随机密钥，
+     * 保证源码泄露也无法伪造 token（代价是重启后所有 token 失效）。
+     */
+    private static final String SECRET_KEY = initSecretKey();
+
     // 24小时过期
     private static final long EXPIRE_TIME = 24L * 60 * 60 * 1000;
+
+    private static String initSecretKey() {
+        String env = System.getenv("JWT_SECRET_KEY");
+        if (env != null && env.length() >= 32) {
+            return env;
+        }
+        byte[] bytes = new byte[48];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        String randomKey = sb.toString();
+        log.warn("未配置 JWT_SECRET_KEY 环境变量，已使用本次启动随机密钥（重启后所有token失效）。生产环境必须配置该变量！");
+        return randomKey;
+    }
 
     /**
      * 生成token

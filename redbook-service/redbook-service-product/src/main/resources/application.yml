@@ -6,33 +6,36 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 123.206.101.247:8848
+        server-addr: ${NACOS_ADDR:localhost:8848}
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://121.37.250.15:3306/rb_product?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/rb_product?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:your_db_password}
-  redis:
-    host: 121.37.250.15
-    port: 6379
-    password: ${REDIS_PASSWORD:your_redis_password}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:your_redis_password}
+    mongodb:
+      uri: ${MONGO_URI:mongodb://${MONGO_USERNAME:root}:${MONGO_PASSWORD:your_mongo_password}@localhost:27017/redbook?authSource=admin}
   rabbitmq:
-    host: 123.206.101.247
-    port: 5672
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:admin}
     password: ${RABBITMQ_PASSWORD:your_rabbitmq_password}
     virtual-host: /
     publisher-confirm-type: correlated
     publisher-returns: true
-  data:
-    mongodb:
-      host: 123.206.101.247
-      port: 27017
-      database: redbook
-      username: ${MONGO_USERNAME:root}
-      password: ${MONGO_PASSWORD:your_mongo_password}
-      authentication-database: admin
 mybatis-plus:
+  # XML mapper 与注解混用，需显式声明扫描位置（默认只扫 classpath*:/mapper/**/*.xml）
+  mapper-locations: classpath*:com/itcast/mapper/*.xml,classpath*:/mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
@@ -45,3 +48,6 @@ agent:
   # AI 服务 agent/chat 接口地址（通过网关访问）
   ai-chat-url: ${AGENT_AI_CHAT_URL:http://localhost:10010/ai/agent/chat}
 
+# 内部接口令牌（order 服务调用 /product/helper/restoreStock 时需携带一致的令牌）
+internal:
+  token: ${INTERNAL_TOKEN:change-me-internal-token}

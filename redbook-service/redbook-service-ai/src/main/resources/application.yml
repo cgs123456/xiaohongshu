@@ -6,7 +6,14 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 123.206.101.247:8848
+        server-addr: ${NACOS_ADDR:localhost:8848}
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
 deepseek:
-  api_url: https://api.deepseek.com/v1
-  api_key: sk-eb8f13a7ddf84eaaaa6b96f451b7aa3f
+  api_url: ${DEEPSEEK_API_URL:https://api.deepseek.com/v1}
+  # 密钥一律走环境变量，不再提交到仓库（原 key 已泄露，请到 DeepSeek 后台吊销）
+  api_key: ${DEEPSEEK_API_KEY:}

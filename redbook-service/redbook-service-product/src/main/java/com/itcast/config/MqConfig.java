@@ -1,6 +1,7 @@
 package com.itcast.config;
 
 import com.itcast.constant.MqConstant;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -10,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
 
+@Slf4j
 @Configuration
 public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.ReturnsCallback {
 
@@ -33,11 +35,9 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
      */
     @Override
     public void returnedMessage(ReturnedMessage returned) {
-        System.out.println("交换器 : " + returned.getExchange());
-        System.out.println("路由键 : " + returned.getRoutingKey());
-        System.out.println("路由失败编码 : " + returned.getReplyCode());
-        System.out.println("路由失败描述 : " + returned.getReplyText());
-        System.out.println("消息 : " + returned.getMessage());
+        log.error("消息路由失败，交换器 : {}，路由键 : {}，路由失败编码 : {}，路由失败描述 : {}，消息 : {}",
+                returned.getExchange(), returned.getRoutingKey(),
+                returned.getReplyCode(), returned.getReplyText(), returned.getMessage());
     }
 
     /**
@@ -48,9 +48,9 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
      */
     @Override
     public void confirm(CorrelationData correlationData, boolean ack, String cause) {
-        System.out.println("消息唯一标记 : " + correlationData);
-        System.out.println("是否确认到达交换器 : " + ack);
-        System.out.println("不能到达交换器的原因 : " + cause);
+        if (!ack) {
+            log.error("消息未到达交换器，消息唯一标记 : {}，原因 : {}", correlationData, cause);
+        }
     }
 
     // 声明交换机

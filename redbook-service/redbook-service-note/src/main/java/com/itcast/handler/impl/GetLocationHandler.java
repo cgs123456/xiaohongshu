@@ -33,9 +33,16 @@ public class GetLocationHandler extends NoteHandler {
             Type typeOfHashMap = new TypeToken<HashMap<String, Object>>(){}.getType();
             Map<String, Object> resultMap = new Gson().fromJson(response, typeOfHashMap);
             if (resultMap != null) {
-                Map<String, String> regeocode = (Map<String, String>) resultMap.get("regeocode");
-                String address = regeocode.get("formatted_address");
-                noteDto.setAddress(address);
+                // 强转为 Map<String,Object>，避免 ClassCastException 隐患
+                Object regeocodeObj = resultMap.get("regeocode");
+                if (regeocodeObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> regeocode = (Map<String, Object>) regeocodeObj;
+                    Object addressObj = regeocode.get("formatted_address");
+                    if (addressObj != null) {
+                        noteDto.setAddress(String.valueOf(addressObj));
+                    }
+                }
             }
         } catch (Exception e) {
             return;

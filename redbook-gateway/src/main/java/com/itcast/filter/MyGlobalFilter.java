@@ -32,7 +32,7 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
         // 2.判断是否是登录接口
         String path = request.getURI().getPath();
         log.info("请求接口为：{}", path);
-        if (path.startsWith("/user/send") || path.startsWith("/user/verify") || path.equals("/note/getNoteList") || path.contains("/helper")) {
+        if (path.startsWith("/user/send") || path.startsWith("/user/verify") || path.equals("/note/getNoteList")) {
             log.info("请求接口放行");
             return chain.filter(exchange);
         }
@@ -50,9 +50,12 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
         try {
             String userId = JwtUtil.parseToken(token);
 
-            // 6.向请求头添加userId
-            request.mutate().header("userId", userId);
-            return chain.filter(exchange);
+            // 6.先移除客户端伪造的同名头，再写入真实userId，并用返回值重建exchange
+            ServerHttpRequest newRequest = request.mutate()
+                    .headers(h -> h.remove("userId"))
+                    .header("userId", userId)
+                    .build();
+            return chain.filter(exchange.mutate().request(newRequest).build());
         } catch (TokenExpiredException | JWTDecodeException e2) {
             response.setStatusCode(HttpStatus.valueOf(ResponseEnum.UNAUTHORIZED.getCode()));
             return response.setComplete();

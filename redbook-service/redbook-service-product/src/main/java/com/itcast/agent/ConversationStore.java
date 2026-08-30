@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 多轮对话存储（Redis）。
- * - key: agent:conversation:{conversationId}
+ * - key: agent:conversation:{userId}:{conversationId}（按用户隔离，防止跨用户读取/续写他人对话）
  * - TTL: 30 分钟，每次读写刷新
  * - 滑动窗口：最多保留 MAX_TURNS*2 条消息（10 轮），超出则截断保留最近的
  */
@@ -40,11 +40,11 @@ public class ConversationStore {
     /**
      * 读取对话历史
      */
-    public List<AgentMessage> getHistory(String conversationId) {
-        if (conversationId == null || conversationId.isEmpty()) {
+    public List<AgentMessage> getHistory(Integer userId, String conversationId) {
+        if (userId == null || conversationId == null || conversationId.isEmpty()) {
             return new ArrayList<>();
         }
-        String key = RedisConstant.AGENT_CONVERSATION + conversationId;
+        String key = conversationKey(userId, conversationId);
         Object val = redisTemplate.opsForValue().get(key);
         if (val == null) {
             return new ArrayList<>();
@@ -63,46 +63,50 @@ public class ConversationStore {
     /**
      * 追加一条消息并保存（自动滑动窗口截断）
      */
-    public void appendMessage(String conversationId, AgentMessage message) {
-        if (conversationId == null || conversationId.isEmpty() || message == null) {
+    public void appendMessage(Integer userId, String conversationId, AgentMessage message) {
+        if (userId == null || conversationId == null || conversationId.isEmpty() || message == null) {
             return;
         }
-        List<AgentMessage> history = getHistory(conversationId);
+        List<AgentMessage> history = getHistory(userId, conversationId);
         history.add(message);
         // 滑动窗口截断
         if (history.size() > MAX_MESSAGES) {
             history = new ArrayList<>(history.subList(history.size() - MAX_MESSAGES, history.size()));
         }
-        save(conversationId, history);
+        save(userId, conversationId, history);
     }
 
     /**
      * 批量追加消息
      */
-    public void appendMessages(String conversationId, List<AgentMessage> messages) {
-        if (conversationId == null || messages == null || messages.isEmpty()) {
+    public void appendMessages(Integer userId, String conversationId, List<AgentMessage> messages) {
+        if (userId == null || conversationId == null || messages == null || messages.isEmpty()) {
             return;
         }
-        List<AgentMessage> history = getHistory(conversationId);
+        List<AgentMessage> history = getHistory(userId, conversationId);
         history.addAll(messages);
         if (history.size() > MAX_MESSAGES) {
             history = new ArrayList<>(history.subList(history.size() - MAX_MESSAGES, history.size()));
         }
-        save(conversationId, history);
+        save(userId, conversationId, history);
     }
 
     /**
      * 清空对话历史（话题切换时调用）
      */
-    public void clear(String conversationId) {
-        if (conversationId == null || conversationId.isEmpty()) {
+    public void clear(Integer userId, String conversationId) {
+        if (userId == null || conversationId == null || conversationId.isEmpty()) {
             return;
         }
-        redisTemplate.delete(RedisConstant.AGENT_CONVERSATION + conversationId);
+        redisTemplate.delete(conversationKey(userId, conversationId));
     }
 
-    private void save(String conversationId, List<AgentMessage> messages) {
-        String key = RedisConstant.AGENT_CONVERSATION + conversationId;
+    private void save(Integer userId, String conversationId, List<AgentMessage> messages) {
+        String key = conversationKey(userId, conversationId);
         redisTemplate.opsForValue().set(key, gson.toJson(messages), TTL_SECONDS, TimeUnit.SECONDS);
+    }
+
+    private String conversationKey(Integer userId, String conversationId) {
+        return RedisConstant.AGENT_CONVERSATION + userId + ":" + conversationId;
     }
 }

@@ -43,8 +43,12 @@ public class SaveNoteToEsHandler extends NoteHandler {
             log.warn("生成 embedding 失败，降级为无向量写入 noteId={}", noteDto.getId(), e);
         }
 
-        // 写入 ES（失败抛异常触发 Saga 补偿，不再吞异常）
-        elasticsearchOperations.save(noteEs);
+        // 写入 ES：纯增强步骤，允许失败不阻断发布（记录日志后继续链）
+        try {
+            elasticsearchOperations.save(noteEs);
+        } catch (Exception e) {
+            log.error("保存笔记到 ES 失败，不阻断发布 noteId={}", noteDto.getId(), e);
+        }
     }
 
     @Override

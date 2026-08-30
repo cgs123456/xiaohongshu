@@ -3,9 +3,22 @@ server:
 spring:
   application:
     name: redbook-service-message
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        port: 8888
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   rabbitmq:
-    host: 123.206.101.247
-    port: 5672
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:admin}
     password: ${RABBITMQ_PASSWORD:your_rabbitmq_password}
     virtual-host: /
+# Netty WebSocket 服务器端口
+netty:
+  port: 8888

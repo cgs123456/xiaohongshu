@@ -1,28 +1,39 @@
 package com.itcast.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.itcast.constant.ExceptionConstant;
 import com.itcast.constant.MqConstant;
 import com.itcast.constant.RedisConstant;
 import com.itcast.enums.AttentionTypeEnum;
 import com.itcast.enums.MessageTypeEnum;
+import com.itcast.exception.UserNoExistException;
 import com.itcast.mapper.AttentionMapper;
+import com.itcast.mapper.UserMapper;
 import com.itcast.model.pojo.Message;
 import com.itcast.model.pojo.Attention;
+import com.itcast.model.pojo.User;
 import com.itcast.result.Result;
 import com.itcast.service.AttentionService;
 import com.itcast.context.UserContext;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@Slf4j
 public class AttentionServiceImpl implements AttentionService {
 
     @Autowired
     private AttentionMapper attentionMapper;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -50,24 +61,42 @@ public class AttentionServiceImpl implements AttentionService {
     public Result<Void> attention(Integer otherId) {
         // 1.获取登录用户id
         Integer ownId = UserContext.getUserId();
-        // 2.设置pojo
-        Attention attention = new Attention();
-        attention.setOtherId(otherId);
-        attention.setOwnId(ownId);
-        // 3.判断是否关注过
-        //Boolean isAttention = redisTemplate.opsForSet().isMember(ATTENTION_SET_CACHE + ownId, otherId);
-        Boolean isAttention = redisTemplate.opsForValue().getBit(
-                RedisConstant.ATTENTION_CACHE + ownId, otherId);
+        // 2.禁止关注自己
+        if (otherId.intValue() == ownId.intValue()) {
+            return Result.failure("不能关注自己");
+        }
+        // 3.校验被关注用户存在
+        User otherUser = userMapper.selectById(otherId);
+        if (otherUser == null) {
+            throw new UserNoExistException(ExceptionConstant.USER_NO_EXIST);
+        }
 
-        // 4.关注或取关
-        if(Boolean.TRUE.equals(isAttention)){
-            // 4.1 取关
-            attentionMapper.deleteById(attention);
-            redisTemplate.opsForValue().setBit(RedisConstant.ATTENTION_CACHE + ownId, otherId, false);
-        }else{
-            // 4.2 关注
-            attentionMapper.insert(attention);
-            redisTemplate.opsForValue().setBit(RedisConstant.ATTENTION_CACHE + ownId, otherId, true);
+        String attentionKey = RedisConstant.ATTENTION_CACHE + ownId;
+        // 4.判断是否关注过（Redis Set）
+        Boolean isAttention = redisTemplate.opsForSet().isMember(attentionKey, otherId);
+
+        if (Boolean.TRUE.equals(isAttention)) {
+            // 5.取关：按 ownId + otherId 条件删除
+            attentionMapper.delete(Wrappers.<Attention>lambdaQuery()
+                    .eq(Attention::getOwnId, ownId)
+                    .eq(Attention::getOtherId, otherId));
+            // 统一使用 Redis Set：SREM
+            redisTemplate.opsForSet().remove(attentionKey, otherId);
+        } else {
+            // 6.关注：insert 用 DuplicateKeyException 幂等兜底（数据库唯一键稍后添加）
+            Attention attention = new Attention();
+            attention.setOwnId(ownId);
+            attention.setOtherId(otherId);
+            try {
+                attentionMapper.insert(attention);
+            } catch (DuplicateKeyException e) {
+                // 唯一键冲突说明已关注，幂等返回成功
+                log.info("重复关注，幂等处理 ownId={} otherId={}", ownId, otherId);
+                redisTemplate.opsForSet().add(attentionKey, otherId);
+                return Result.success(null);
+            }
+            // 统一使用 Redis Set：SADD
+            redisTemplate.opsForSet().add(attentionKey, otherId);
 
             // 用户关注，通知消息
             Message attentionMessage = new Message();

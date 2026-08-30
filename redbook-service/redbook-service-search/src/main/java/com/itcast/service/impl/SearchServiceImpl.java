@@ -22,10 +22,15 @@ import org.springframework.data.elasticsearch.core.query.Query;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -63,12 +68,13 @@ public class SearchServiceImpl implements SearchService {
         // 1.混合检索 / 降级纯 BM25
         List<Note> notes = searchNotes(key);
 
-        // 2.构造 VO
+        // 2.批量构造VO：一次RPC按id映射组装用户信息，避免循环RPC
+        Map<Integer, User> userMap = loadUsersByIds(notes);
         List<NoteVo> noteVos = new ArrayList<>();
         for (Note note : notes) {
             NoteVo noteVo = new NoteVo();
             BeanUtils.copyProperties(note, noteVo);
-            noteVo.setUser(userClient.getUserById(note.getUserId()).getData());
+            noteVo.setUser(userMap.get(note.getUserId()));
             noteVos.add(noteVo);
         }
 
@@ -90,12 +96,50 @@ public class SearchServiceImpl implements SearchService {
                 historyMapper.insert(history);
             }
         } catch (Exception e) {
-            log.info("用户搜索记录处理异常: {}", e.getMessage());
+            log.error("保存搜索历史失败", e);
         }
 
-        // 4.保存热度
-        redisTemplate.opsForZSet().incrementScore(RedisConstant.NOTE_SCORE, key, 1);
+        // 4.保存热度（按天分key，TTL 7天）
+        String hotKey = getHotKey();
+        redisTemplate.opsForZSet().incrementScore(hotKey, key, 1);
+        redisTemplate.expire(hotKey, 7, TimeUnit.DAYS);
         return Result.success(noteVos);
+    }
+
+    /**
+     * 批量查询用户并按id映射（一次RPC；失败降级为空map，对应VO的user为null）
+     */
+    private Map<Integer, User> loadUsersByIds(List<Note> notes) {
+        Map<Integer, User> userMap = new HashMap<>();
+        if (notes == null || notes.isEmpty()) {
+            return userMap;
+        }
+        Set<Integer> userIds = notes.stream()
+                .map(Note::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIds.isEmpty()) {
+            return userMap;
+        }
+        String ids = userIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        try {
+            Result<List<User>> result = userClient.getUserByIds(ids);
+            if (result != null && result.getCode() == 200 && result.getData() != null) {
+                for (User user : result.getData()) {
+                    userMap.put(user.getId(), user);
+                }
+            }
+        } catch (Exception e) {
+            log.error("批量查询用户信息失败，降级处理", e);
+        }
+        return userMap;
+    }
+
+    /**
+     * 热搜按天分 key：原前缀 + yyyyMMdd（与 HotServiceImpl 查询侧保持一致）
+     */
+    private String getHotKey() {
+        return RedisConstant.NOTE_SCORE + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 
     /**

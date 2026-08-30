@@ -71,7 +71,7 @@
                     v-model="verifyCode"
                     type="text"
                     placeholder="请输入验证码"
-                    maxlength="4"
+                    maxlength="6"
                     class="code-input"
                   />
                   <button class="send-code-btn" :disabled="countdown > 0 || loading" @click="sendCode">
@@ -124,12 +124,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { Icon } from '@iconify/vue'
 import { sendVerifyCode, verifyLogin } from '../api/auth'
+import { useUserStore } from '../stores/user'
+import { websocketManager } from '../utils/websocket'
 import { useToast } from '../composables/useToast'
 
 const { showToast } = useToast()
+const userStore = useUserStore()
 
 interface Props {
   visible: boolean
@@ -207,8 +210,8 @@ const handleLogin = async () => {
     return
   }
 
-  if (!verifyCode.value || verifyCode.value.length !== 4) {
-    showToast('请输入4位验证码', 'error')
+  if (!verifyCode.value || verifyCode.value.length !== 6) {
+    showToast('请输入6位验证码', 'error')
     return
   }
 
@@ -219,17 +222,19 @@ const handleLogin = async () => {
     const response = await verifyLogin(phoneNumber.value, verifyCode.value)
 
     if (response.code === 200) {
-      // 登录成功，保存 token
+      // 登录成功，写入全局用户状态 store（同步 localStorage）
       const token = response.data
-      localStorage.setItem('token', token)
       // 设置 token 过期时间（例如：7 天后）
       const expiryTime = Date.now() + 7 * 24 * 60 * 60 * 1000
-      localStorage.setItem('token_expiry', expiryTime.toString())
-      
+      userStore.login(token, null, expiryTime)
+
+      // 关键：登录成功后立即建立 WebSocket 连接
+      websocketManager.connect()
+
       showToast('登录成功！', 'success')
       emit('login-success')
       closeModal()
-      
+
       // 清空表单
       phoneNumber.value = ''
       verifyCode.value = ''
@@ -244,6 +249,14 @@ const handleLogin = async () => {
     loading.value = false
   }
 }
+
+// 组件卸载时清理倒计时定时器，防止内存泄漏
+onUnmounted(() => {
+  if (timer) {
+    clearInterval(timer)
+    timer = null
+  }
+})
 </script>
 
 <style scoped>

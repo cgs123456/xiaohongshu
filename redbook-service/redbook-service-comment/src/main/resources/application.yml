@@ -6,14 +6,9 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 123.206.101.247:8848
+        server-addr: ${NACOS_ADDR:localhost:8848}
   data:
     mongodb:
-      host: 123.206.101.247
-      port: 27017
-      database: redbook
-      username: ${MONGO_USERNAME:root}
-      password: ${MONGO_PASSWORD:your_mongo_password}
-      authentication-database: admin
+      uri: ${MONGO_URI:mongodb://localhost:27017/redbook}
 
 

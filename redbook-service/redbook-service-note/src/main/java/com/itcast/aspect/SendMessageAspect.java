@@ -3,6 +3,7 @@ package com.itcast.aspect;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itcast.annotation.SendMessage;
+import com.itcast.config.KafkaConfig;
 import com.itcast.enums.LogType;
 import com.itcast.model.pojo.BehaviorMessage;
 import com.itcast.context.UserContext;
@@ -67,7 +68,7 @@ public class SendMessageAspect {
 
         try {
             log.info("【用户行为日志】用户[id={}]对笔记[id={}]执行了{}操作", userId, noteId, type);
-            kafkaTemplate.send("user-behavior-log", objectMapper.writeValueAsString(behaviorMessage));
+            kafkaTemplate.send(KafkaConfig.USER_BEHAVIOR_LOG_TOPIC, objectMapper.writeValueAsString(behaviorMessage));
         } catch (JsonProcessingException e) {
             log.error("序列化用户行为日志失败 noteId:{} userId:{}", noteId, userId, e);
         }

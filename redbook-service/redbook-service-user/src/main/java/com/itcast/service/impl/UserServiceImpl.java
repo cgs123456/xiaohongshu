@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 @Service
 @Slf4j
@@ -73,6 +75,14 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public Result<List<User>> getUserByIds(List<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Result.success(Collections.emptyList());
+        }
+        return Result.success(userMapper.selectBatchIds(ids));
+    }
+
+    @Override
     public Result<Void> updateImage(MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             throw new FileIsNullException(ExceptionConstant.FILE_IS_NULL);
@@ -80,17 +90,11 @@ public class UserServiceImpl implements UserService {
         log.info("用户更新头像...");
         // 1.上传头像
         String url = ossUtil.uploadImg(file.getBytes());
-        // 2.根据userId更新数据库
-        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(User::getId, UserContext.getUserId());
-        User user = userMapper.selectOne(queryWrapper);
-        if (user == null) {
-            throw new UserNoExistException(ExceptionConstant.USER_NO_EXIST);
-        }
-        // 3.设置头像
-        user.setImage(url);
-        // 4.更新数据库
-        userMapper.updateById(user);
+        // 2.使用 LambdaUpdateWrapper 只更新 image 字段，避免先查再全量更新
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(User::getId, UserContext.getUserId())
+                .set(User::getImage, url);
+        userMapper.update(null, updateWrapper);
         return Result.success(null);
     }
 

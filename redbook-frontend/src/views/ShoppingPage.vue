@@ -100,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
@@ -124,6 +124,15 @@ const categories = ref([
   { id: 'books', name: '图书文娱', icon: '' },
 ])
 
+// 分类英文 id 到后端商品 type（中文）的映射
+const categoryTypeMap: Record<string, string> = {
+  beauty: '美妆',
+  fashion: '服饰',
+  food: '食品',
+  digital: '数码',
+  home: '家居'
+}
+
 const activeCategory = ref('all')
 const allProducts = ref<Product[]>([])
 const loading = ref(false)
@@ -144,37 +153,65 @@ const buyAttributes = ref<CustomAttribute[] | null>(null)
 // 购物助手
 const showAssistant = ref(false)
 
-// 根据分类过滤商品
+// 根据分类过滤商品（将英文 id 映射为后端中文分类后再比较）
 const products = computed(() => {
   if (activeCategory.value === 'all') {
     return allProducts.value
   }
-  return allProducts.value.filter(product => product.type === activeCategory.value)
+  const typeName = categoryTypeMap[activeCategory.value]
+  if (!typeName) return []
+  return allProducts.value.filter(product => product.type === typeName)
 })
 
-// 加载商品列表
+// 加载商品列表（追加模式）
 const loadProducts = async () => {
   if (loading.value || !hasMore.value) return
-  
+
+  const page = currentPage.value
+
   try {
     loading.value = true
-    const response = await getProductList(currentPage.value, pageSize.value)
-    if (response.code === 200 && response.data) {
-      allProducts.value = [...allProducts.value, ...response.data]
-      
-      // 如果返回的数据少于每页数量，说明没有更多数据了
-      if (response.data.length < pageSize.value) {
-        hasMore.value = false
-      }
+    const response = await getProductList(page, pageSize.value)
+    const newProducts = response.data || []
+
+    allProducts.value = [...allProducts.value, ...newProducts]
+
+    // 返回空数组或不足一页时停止加载，否则请求成功后翻页
+    if (newProducts.length === 0 || newProducts.length < pageSize.value) {
+      hasMore.value = false
     } else {
-      showToast(response.message || '加载商品失败', 'error')
+      currentPage.value = page + 1
     }
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : '网络错误，请稍后重试'
     showToast(errorMsg, 'error')
+    hasMore.value = false
   } finally {
     loading.value = false
   }
+}
+
+// 滚动节流：requestAnimationFrame + 200ms 时间戳节流
+let scrollTicking = false
+let lastScrollTime = 0
+const handleScroll = () => {
+  const now = Date.now()
+  if (scrollTicking || now - lastScrollTime < 200) return
+
+  scrollTicking = true
+  window.requestAnimationFrame(() => {
+    scrollTicking = false
+    lastScrollTime = Date.now()
+
+    const scrollTop = document.documentElement.scrollTop
+    const windowHeight = window.innerHeight
+    const documentHeight = document.documentElement.scrollHeight
+
+    // 距离底部 200px 时触发加载
+    if (documentHeight - scrollTop - windowHeight < 200) {
+      loadProducts()
+    }
+  })
 }
 
 // 格式化数字
@@ -201,13 +238,9 @@ const getProductTag = (product: Product) => {
 // 加入购物车
 const handleAddToCart = async (data: { productId: number }) => {
   try {
-    const response = await addToCart(data.productId, 1)
-    if (response.code === 200) {
-      showToast(`已将商品加入购物车`, 'success')
-      showProductModal.value = false
-    } else {
-      showToast(response.message || '加入购物车失败', 'error')
-    }
+    await addToCart(data.productId, 1)
+    showToast(`已将商品加入购物车`, 'success')
+    showProductModal.value = false
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : '加入购物车失败'
     showToast(errorMsg, 'error')
@@ -228,6 +261,11 @@ const handleBuySuccess = () => {
 
 onMounted(() => {
   loadProducts()
+  window.addEventListener('scroll', handleScroll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
 })
 </script>
 

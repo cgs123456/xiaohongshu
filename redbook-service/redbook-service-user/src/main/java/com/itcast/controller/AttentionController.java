@@ -6,6 +6,7 @@ import com.itcast.model.pojo.Attention;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,7 +24,10 @@ public class AttentionController {
         return attentionService.isAttention(otherId);
     }
 
-    @GetMapping("/attention/{otherId}")
+    /**
+     * 关注/取关改为 POST（写操作不应使用 GET）
+     */
+    @PostMapping("/attention/{otherId}")
     public Result<Void> attention(@PathVariable("otherId") Integer otherId) {
         return attentionService.attention(otherId);
     }

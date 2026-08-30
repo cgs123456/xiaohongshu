@@ -2,26 +2,30 @@ package com.itcast.strategy.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.itcast.client.UserClient;
-import com.itcast.constant.ExceptionConstant;
+import com.itcast.component.UserBatchLoader;
 import com.itcast.context.UserContext;
-import com.itcast.exception.NoteNoExistException;
 import com.itcast.mapper.CollectionMapper;
 import com.itcast.mapper.NoteMapper;
 import com.itcast.model.pojo.Collection;
 import com.itcast.model.pojo.Note;
+import com.itcast.model.pojo.User;
 import com.itcast.model.vo.NoteVo;
 import com.itcast.result.Result;
 import com.itcast.strategy.GetNotesStrategy;
 import com.itcast.strategy.NoteStrategyContext;
 import com.itcast.strategy.NoteStrategyType;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class GetNoteListByCollection implements GetNotesStrategy {
 
     @Autowired
@@ -29,6 +33,9 @@ public class GetNoteListByCollection implements GetNotesStrategy {
 
     @Autowired
     private UserClient userClient;
+
+    @Autowired
+    private UserBatchLoader userBatchLoader;
 
     @Autowired
     private CollectionMapper collectionMapper;
@@ -48,17 +55,31 @@ public class GetNoteListByCollection implements GetNotesStrategy {
         if (collectionList.isEmpty()) {
             return Result.success(new ArrayList<>());
         }
-        // 2.设置vo
-        List<NoteVo> noteVoList = collectionList.stream().map(collection -> {
-            Note note = noteMapper.selectById(collection.getNoteId());
+        // 2.一次性批量查询笔记，消除 N+1
+        List<Long> noteIds = collectionList.stream().map(Collection::getNoteId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (noteIds.isEmpty()) {
+            return Result.success(new ArrayList<>());
+        }
+        Map<Long, Note> noteMap = noteMapper.selectBatchIds(noteIds).stream()
+                .collect(Collectors.toMap(Note::getId, n -> n, (a, b) -> a));
+        // 3.批量查询用户
+        List<Integer> userIds = noteMap.values().stream().map(Note::getUserId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        Map<Integer, User> userMap = userBatchLoader.batchGetUsers(userIds);
+        // 4.组装 VO，笔记不存在的跳过该条，绝不让整个列表 500
+        List<NoteVo> noteVoList = new ArrayList<>(collectionList.size());
+        for (Collection collection : collectionList) {
+            Note note = noteMap.get(collection.getNoteId());
             if (note == null) {
-                throw new NoteNoExistException(ExceptionConstant.NOTE_NO_EXIST);
+                continue;
             }
             NoteVo noteVo = new NoteVo();
             noteVo.setNote(note);
-            noteVo.setUser(userClient.getUserById(note.getUserId()).getData());
-            return noteVo;
-        }).collect(Collectors.toList());
+            noteVo.setUser(userMap.get(note.getUserId()));
+            noteVoList.add(noteVo);
+        }
         return Result.success(noteVoList);
     }
+
 }

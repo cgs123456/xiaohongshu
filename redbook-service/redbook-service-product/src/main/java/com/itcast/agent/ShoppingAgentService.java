@@ -69,9 +69,14 @@ public class ShoppingAgentService {
         if (conversationId == null || conversationId.isEmpty()) {
             conversationId = UUID.randomUUID().toString().replace("-", "");
         }
+        // 会话按用户隔离，防止拿到/猜到 conversationId 读写他人对话
+        Integer userId = UserContext.getUserId();
+        if (userId == null) {
+            return "请先登录后再使用购物助手。";
+        }
 
         // 2. 读取历史 + 追加当前用户消息
-        List<AgentMessage> history = conversationStore.getHistory(conversationId);
+        List<AgentMessage> history = conversationStore.getHistory(userId, conversationId);
         history.add(new AgentMessage("user", userMessage));
 
         // 3. 构建 system prompt（工具说明 + Few-Shot）
@@ -128,7 +133,7 @@ public class ShoppingAgentService {
         }
 
         // 6. 保存对话历史
-        conversationStore.appendMessages(conversationId, history);
+        conversationStore.appendMessages(userId, conversationId, history);
 
         log.info("Agent 对话完成 conversationId={} finalReply={}", conversationId, finalReply);
         return finalReply;

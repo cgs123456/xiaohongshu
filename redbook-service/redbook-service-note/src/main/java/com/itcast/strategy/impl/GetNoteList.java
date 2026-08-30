@@ -2,24 +2,30 @@ package com.itcast.strategy.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.itcast.client.UserClient;
+import com.itcast.component.UserBatchLoader;
 import com.itcast.constant.RedisConstant;
 import com.itcast.context.UserContext;
 import com.itcast.mapper.NoteMapper;
 import com.itcast.model.pojo.Note;
+import com.itcast.model.pojo.User;
 import com.itcast.model.vo.NoteVo;
 import com.itcast.result.Result;
 import com.itcast.strategy.GetNotesStrategy;
 import com.itcast.strategy.NoteStrategyContext;
 import com.itcast.strategy.NoteStrategyType;
 import com.itcast.util.BloomFilterUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class GetNoteList implements GetNotesStrategy {
 
     @Autowired
@@ -27,6 +33,9 @@ public class GetNoteList implements GetNotesStrategy {
 
     @Autowired
     private UserClient userClient;
+
+    @Autowired
+    private UserBatchLoader userBatchLoader;
 
     @Autowired
     private BloomFilterUtil bloomFilterUtil;
@@ -52,15 +61,25 @@ public class GetNoteList implements GetNotesStrategy {
         }
         // 4.布隆过滤器过滤
         Integer userId = UserContext.getUserId();
-        List<NoteVo> noteVoList = noteList.stream()
+        List<Note> filteredList = noteList.stream()
                 .filter(note -> !bloomFilterUtil.mightContain(RedisConstant.USER_BLOOM_FILTER + userId, note.getId().toString()))
-                .map(note -> {
-                    NoteVo noteVo = new NoteVo();
-                    noteVo.setNote(note);
-                    noteVo.setUser(userClient.getUserById(note.getUserId()).getData());
-                    return noteVo;
-                })
                 .collect(Collectors.toList());
+        if (filteredList.isEmpty()) {
+            return Result.success(new ArrayList<>());
+        }
+        // 5.批量查询用户，消除 N+1
+        List<Integer> userIds = filteredList.stream().map(Note::getUserId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        Map<Integer, User> userMap = userBatchLoader.batchGetUsers(userIds);
+        // 6.组装 VO
+        List<NoteVo> noteVoList = new ArrayList<>(filteredList.size());
+        for (Note note : filteredList) {
+            NoteVo noteVo = new NoteVo();
+            noteVo.setNote(note);
+            noteVo.setUser(userMap.get(note.getUserId()));
+            noteVoList.add(noteVo);
+        }
         return Result.success(noteVoList);
     }
+
 }

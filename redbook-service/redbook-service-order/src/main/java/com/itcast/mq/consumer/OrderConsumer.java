@@ -9,33 +9,48 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
 public class OrderConsumer {
 
+    /** 单条消息最大重试次数，超过后进死信队列 */
+    private static final int MAX_RETRY_COUNT = 3;
+
+    /** 消息重试计数 key 前缀 */
+    private static final String ORDER_RETRY_KEY = "order:retry:";
+
     @Autowired
     private OrderService orderService;
 
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
     @RabbitListener(queues = MqConstant.SAVE_ORDER_QUEUE)
-    public void onMessage(Message<BuyDto> message, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag){
+    public void onMessage(Message<BuyDto> message, Channel channel,
+                          @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag,
+                          @Header(name = AmqpHeaders.MESSAGE_ID, required = false) String amqpMessageId){
         BuyDto buyDto = message.getPayload();
 
         OrderDto orderDto = new OrderDto();
         orderDto.setProductId(buyDto.getProductId());
         orderDto.setSelectAttributes(buyDto.getSelectAttributes());
         orderDto.setUserId(buyDto.getUserId());
+        orderDto.setQuantity(buyDto.getQuantity());
 
-        // 使用 deliveryTag 作为消息ID（deliveryTag 在同一条消息的多次投递中相同，保证幂等性）
-        String messageId = String.valueOf(deliveryTag);
-        
+        // 使用发送方设置的UUID messageId做幂等（product服务通过MessagePostProcessor设置）；
+        // 兜底：缺失时使用deliveryTag
+        String messageId = amqpMessageId != null && !amqpMessageId.isBlank()
+                ? amqpMessageId : String.valueOf(deliveryTag);
+        orderDto.setMessageId(messageId);
+
         try {
-            // 设置消息ID到 OrderDto，用于幂等性控制
-            orderDto.setMessageId(messageId);
-            
             log.info("第一个消息消费者监听，处理消息：{}, messageId: {}", orderDto, messageId);
 
             // 处理订单保存（通过Service调用，事务会生效，包含幂等性检查）
@@ -53,11 +68,35 @@ public class OrderConsumer {
                 log.error("确认已处理消息时发生异常", ex);
             }
         } catch (Exception e) {
-            log.error("处理订单消息时发生异常，消息将重新入队，messageId: {}", messageId, e);
+            // 失败重试计数：Redis INCR order:retry:{messageId}，TTL 24小时
+            long retryCount = 0;
             try {
-                channel.basicNack(deliveryTag, false, true);
+                String retryKey = ORDER_RETRY_KEY + messageId;
+                Long count = redisTemplate.opsForValue().increment(retryKey);
+                if (count != null && count == 1) {
+                    redisTemplate.expire(retryKey, 24, TimeUnit.HOURS);
+                }
+                retryCount = count == null ? 0 : count;
             } catch (Exception ex) {
-                log.error("拒绝消息时发生异常", ex);
+                log.error("记录消息重试次数失败，messageId: {}", messageId, ex);
+            }
+
+            if (retryCount > MAX_RETRY_COUNT) {
+                log.error("消息处理失败且重试次数已达上限（{}次），进入死信队列，messageId: {}",
+                        MAX_RETRY_COUNT, messageId, e);
+                try {
+                    channel.basicNack(deliveryTag, false, false);
+                } catch (Exception ex) {
+                    log.error("拒绝消息时发生异常", ex);
+                }
+            } else {
+                log.error("处理订单消息时发生异常，消息将重新入队，messageId: {}，当前重试次数: {}",
+                        messageId, retryCount, e);
+                try {
+                    channel.basicNack(deliveryTag, false, true);
+                } catch (Exception ex) {
+                    log.error("拒绝消息时发生异常", ex);
+                }
             }
         }
     }

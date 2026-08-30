@@ -11,6 +11,11 @@ import java.util.List;
 public interface ProductService {
     Result<List<Product>> getProductList();
 
+    /**
+     * 可选分页查询商品列表（page/pageSize 为空时返回全部，兼容现状）
+     */
+    Result<List<Product>> getProductList(Integer page, Integer pageSize);
+
     Result<ProductVo> getProduct(Integer productId);
 
     Result<List<Product>> getProductByShop(Integer productId);
@@ -36,4 +41,9 @@ public interface ProductService {
     Product selectById(Integer productId);
 
     void updateById(Product product);
+
+    /**
+     * 回补商品库存（MySQL 原子加库存 + Redis INCRBY，订单超时关单时由 order 服务调用）
+     */
+    Result<Void> restoreStock(Integer productId, Integer quantity);
 }

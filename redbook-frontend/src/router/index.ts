@@ -1,44 +1,64 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomePage from '../views/HomePage.vue'
-import NotificationPage from '../views/NotificationPage.vue'
-import ShoppingPage from '../views/ShoppingPage.vue'
+import type { RouteRecordRaw } from 'vue-router'
+
+const routes: RouteRecordRaw[] = [
+    {
+        path: '/',
+        name: 'Home',
+        component: () => import('../views/HomePage.vue'),
+        meta: { title: '首页' }
+    },
+    {
+        path: '/notifications',
+        name: 'Notifications',
+        component: () => import('../views/NotificationPage.vue'),
+        meta: { title: '通知', requiresAuth: true }
+    },
+    {
+        path: '/shopping',
+        name: 'Shopping',
+        component: () => import('../views/ShoppingPage.vue'),
+        meta: { title: '购物', requiresAuth: true }
+    },
+    {
+        path: '/cart',
+        name: 'Cart',
+        component: () => import('../views/CartPage.vue'),
+        meta: { title: '购物车', requiresAuth: true }
+    },
+    {
+        path: '/profile',
+        name: 'Profile',
+        component: () => import('../views/ProfilePage.vue'),
+        meta: { title: '个人主页', requiresAuth: true }
+    },
+    {
+        path: '/:pathMatch(.*)*',
+        name: 'NotFound',
+        component: () => import('../views/NotFound.vue'),
+        meta: { title: '页面不存在' }
+    }
+]
 
 const router = createRouter({
     history: createWebHistory(),
-    routes: [
-        {
-            path: '/',
-            name: 'Home',
-            component: HomePage
-        },
-        {
-            path: '/notifications',
-            name: 'Notifications',
-            component: NotificationPage
-        },
-        {
-            path: '/shopping',
-            name: 'Shopping',
-            component: ShoppingPage
-        },
-        {
-            path: '/:pathMatch(.*)*',
-            name: 'NotFound',
-            component: () => import('../views/NotFound.vue')
-        }
-    ]
+    routes
 })
 
-// 全局前置守卫
+// 全局前置守卫：基于 meta.requiresAuth 判断是否需要登录
 router.beforeEach((to, _from, next) => {
     const token = localStorage.getItem('token')
-    // 需要登录的页面
-    const authPages = ['/notifications', '/shopping']
-    if (authPages.includes(to.path) && !token) {
+    if (to.meta.requiresAuth && !token) {
         next('/')
     } else {
         next()
     }
+})
+
+// 全局后置钩子：设置页面标题
+router.afterEach((to) => {
+    const title = to.meta.title as string | undefined
+    document.title = title ? `小红书 - ${title}` : '小红书'
 })
 
 export default router

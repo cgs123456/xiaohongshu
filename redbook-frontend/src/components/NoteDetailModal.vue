@@ -108,7 +108,7 @@
                               </div>
                               <p class="comment-text">{{ childVo.comment.content }}</p>
                               <div class="comment-actions">
-                                <button class="comment-action-btn" @click="replyToComment(commentVo)">
+                                <button class="comment-action-btn" @click="replyToComment(childVo)">
                                   <Icon icon="mdi:reply" width="14" />
                                   回复
                                 </button>
@@ -156,11 +156,11 @@
                 
                 <!-- 互动操作按钮（合并统计和操作） -->
                 <div class="action-buttons">
-                  <button class="action-btn like-btn" :class="{ active: isLiked }" @click="toggleLike">
+                  <button class="action-btn like-btn" :class="{ active: isLiked }" :disabled="likeLoading" @click="toggleLike">
                     <Icon :icon="isLiked ? 'mdi:heart' : 'mdi:heart-outline'" width="22" />
                     <span>{{ noteDetail.note.like || 0 }}</span>
                   </button>
-                  <button class="action-btn collect-btn" :class="{ active: isCollected }" @click="toggleCollect">
+                  <button class="action-btn collect-btn" :class="{ active: isCollected }" :disabled="collectLoading" @click="toggleCollect">
                     <Icon :icon="isCollected ? 'mdi:star' : 'mdi:star-outline'" width="22" />
                     <span>{{ noteDetail.note.collection || 0 }}</span>
                   </button>
@@ -212,6 +212,12 @@ const commentCount = ref(0)
 const loadingComments = ref(false)
 const submittingComment = ref(false)
 const replyingTo = ref<CommentVo | null>(null)
+const likeLoading = ref(false)
+const collectLoading = ref(false)
+
+// 竞态保护：记录当前正在加载的 noteId，只有最新请求的结果能写入状态
+const currentNoteId = ref<string | null>(null)
+const isStale = (noteId: string) => noteId !== currentNoteId.value
 
 // 清理 HTML 内容，防止 XSS 攻击
 const cleanHtml = computed(() => DOMPurify.sanitize(noteDetail.value?.note?.content || ''))
@@ -221,13 +227,17 @@ const loadNoteDetail = async (noteId: string) => {
   try {
     loading.value = true
     const response = await getNoteDetail(noteId)
-    if (response.code === 200 && response.data) {
-      noteDetail.value = response.data
-    }
-  } catch (error) {
-    // 加载笔记详情失败
+    if (isStale(noteId)) return
+    noteDetail.value = response.data ?? null
+  } catch (error: unknown) {
+    if (isStale(noteId)) return
+    noteDetail.value = null
+    const errorMsg = error instanceof Error ? error.message : '加载笔记详情失败'
+    showToast(errorMsg, 'error')
   } finally {
-    loading.value = false
+    if (!isStale(noteId)) {
+      loading.value = false
+    }
   }
 }
 
@@ -236,13 +246,15 @@ const loadComments = async (noteId: string) => {
   try {
     loadingComments.value = true
     const response = await getCommentList(noteId)
-    if (response.code === 200 && response.data) {
-      comments.value = response.data
-    }
+    if (isStale(noteId)) return
+    comments.value = response.data || []
   } catch (error) {
+    if (isStale(noteId)) return
     comments.value = []
   } finally {
-    loadingComments.value = false
+    if (!isStale(noteId)) {
+      loadingComments.value = false
+    }
   }
 }
 
@@ -250,10 +262,10 @@ const loadComments = async (noteId: string) => {
 const loadCommentCount = async (noteId: string) => {
   try {
     const response = await getCommentCount(noteId)
-    if (response.code === 200 && response.data !== undefined) {
-      commentCount.value = response.data
-    }
+    if (isStale(noteId)) return
+    commentCount.value = response.data ?? 0
   } catch (error) {
+    if (isStale(noteId)) return
     commentCount.value = 0
   }
 }
@@ -262,10 +274,10 @@ const loadCommentCount = async (noteId: string) => {
 const loadLikeStatus = async (noteId: string) => {
   try {
     const response = await checkIsLiked(noteId)
-    if (response.code === 200 && response.data !== undefined) {
-      isLiked.value = response.data
-    }
+    if (isStale(noteId)) return
+    isLiked.value = response.data ?? false
   } catch (error) {
+    if (isStale(noteId)) return
     isLiked.value = false
   }
 }
@@ -274,10 +286,10 @@ const loadLikeStatus = async (noteId: string) => {
 const loadCollectionStatus = async (noteId: string) => {
   try {
     const response = await checkIsCollected(noteId)
-    if (response.code === 200 && response.data !== undefined) {
-      isCollected.value = response.data
-    }
+    if (isStale(noteId)) return
+    isCollected.value = response.data ?? false
   } catch (error) {
+    if (isStale(noteId)) return
     isCollected.value = false
   }
 }
@@ -288,12 +300,11 @@ const loadFollowStatus = async () => {
     isFollowed.value = false
     return
   }
-  
+
   try {
     const response = await checkIsFollowed(noteDetail.value.user.id)
-    if (response.code === 200 && response.data !== undefined) {
-      isFollowed.value = response.data === 1
-    }
+    if (isStale(currentNoteId.value || '')) return
+    isFollowed.value = response.data === 1
   } catch (error) {
     isFollowed.value = false
   }
@@ -304,6 +315,8 @@ watch(
   () => [props.visible, props.noteId],
   async ([visible, noteId]) => {
     if (visible && noteId) {
+      // 更新当前目标 noteId，使旧请求的结果失效
+      currentNoteId.value = noteId as string
       await Promise.all([
         loadNoteDetail(noteId as string),
         loadComments(noteId as string),
@@ -312,7 +325,9 @@ watch(
         loadCollectionStatus(noteId as string)
       ])
       // 加载关注状态（需要先加载笔记详情获取用户ID）
-      await loadFollowStatus()
+      if (!isStale(noteId as string)) {
+        await loadFollowStatus()
+      }
     }
   },
   { immediate: true }
@@ -327,7 +342,7 @@ const handleOverlayClick = () => {
 }
 
 const toggleLike = async () => {
-  if (!props.noteId) {
+  if (!props.noteId || likeLoading.value) {
     return
   }
 
@@ -338,29 +353,33 @@ const toggleLike = async () => {
     return
   }
 
+  // 记录本地状态，乐观更新，失败时回滚
+  const prevLiked = isLiked.value
+  const prevCount = noteDetail.value?.note?.like ?? 0
+
+  isLiked.value = !prevLiked
+  if (noteDetail.value?.note) {
+    noteDetail.value.note.like = isLiked.value ? prevCount + 1 : prevCount - 1
+  }
+
+  likeLoading.value = true
   try {
-    const response = await apiToggleLike(props.noteId)
-    
-    if (response.code === 200) {
-      // 切换点赞状态
-      isLiked.value = !isLiked.value
-      
-      // 更新点赞数量
-      if (noteDetail.value?.note) {
-        const currentLikes = noteDetail.value.note.like || 0
-        noteDetail.value.note.like = isLiked.value ? currentLikes + 1 : currentLikes - 1
-      }
-    } else {
-      showToast(response.message || '操作失败', 'error')
-    }
+    await apiToggleLike(props.noteId)
   } catch (error: unknown) {
+    // 请求失败，回滚本地计数和状态
+    isLiked.value = prevLiked
+    if (noteDetail.value?.note) {
+      noteDetail.value.note.like = prevCount
+    }
     const errorMsg = error instanceof Error ? error.message : '操作失败，请稍后重试'
     showToast(errorMsg, 'error')
+  } finally {
+    likeLoading.value = false
   }
 }
 
 const toggleCollect = async () => {
-  if (!props.noteId) {
+  if (!props.noteId || collectLoading.value) {
     return
   }
 
@@ -371,24 +390,28 @@ const toggleCollect = async () => {
     return
   }
 
+  // 乐观更新，失败时回滚
+  const prevCollected = isCollected.value
+  const prevCount = noteDetail.value?.note?.collection ?? 0
+
+  isCollected.value = !prevCollected
+  if (noteDetail.value?.note) {
+    noteDetail.value.note.collection = isCollected.value ? prevCount + 1 : prevCount - 1
+  }
+
+  collectLoading.value = true
   try {
-    const response = await apiToggleCollection(props.noteId)
-    
-    if (response.code === 200) {
-      // 切换收藏状态
-      isCollected.value = !isCollected.value
-      
-      // 更新收藏数量
-      if (noteDetail.value?.note) {
-        const currentCollections = noteDetail.value.note.collection || 0
-        noteDetail.value.note.collection = isCollected.value ? currentCollections + 1 : currentCollections - 1
-      }
-    } else {
-      showToast(response.message || '操作失败', 'error')
-    }
+    await apiToggleCollection(props.noteId)
   } catch (error: unknown) {
+    // 请求失败，回滚本地计数和状态
+    isCollected.value = prevCollected
+    if (noteDetail.value?.note) {
+      noteDetail.value.note.collection = prevCount
+    }
     const errorMsg = error instanceof Error ? error.message : '操作失败，请稍后重试'
     showToast(errorMsg, 'error')
+  } finally {
+    collectLoading.value = false
   }
 }
 
@@ -411,30 +434,27 @@ const submitComment = async () => {
 
   try {
     submittingComment.value = true
-    
+
     const parentId = replyingTo.value ? replyingTo.value.commentVoId : '0'
-    
-    const response = await postComment({
+
+    await postComment({
       noteId: props.noteId,
       content: commentInput.value.trim(),
       parentId: parentId
     })
 
-    if (response.code === 200) {
-      // 清空输入框和回复状态
-      commentInput.value = ''
-      replyingTo.value = null
-      
-      // 重新加载评论列表和数量
-      await Promise.all([
-        loadComments(props.noteId),
-        loadCommentCount(props.noteId)
-      ])
-    } else {
-      showToast(response.message || '评论发表失败', 'error')
-    }
-  } catch (error) {
-    showToast('评论发表失败，请稍后重试', 'error')
+    // 清空输入框和回复状态
+    commentInput.value = ''
+    replyingTo.value = null
+
+    // 重新加载评论列表和数量
+    await Promise.all([
+      loadComments(props.noteId),
+      loadCommentCount(props.noteId)
+    ])
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : '评论发表失败，请稍后重试'
+    showToast(errorMsg, 'error')
   } finally {
     submittingComment.value = false
   }
@@ -464,22 +484,19 @@ const toggleFollow = async () => {
     showToast('请先登录后再关注', 'error')
     return
   }
-  
+
   if (!noteDetail.value?.user?.id) {
     showToast('用户信息不存在', 'error')
     return
   }
-  
+
   try {
-    const response = await apiToggleFollow(noteDetail.value.user.id)
-    if (response.code === 200) {
-      isFollowed.value = !isFollowed.value
-      showToast(isFollowed.value ? '关注成功' : '已取消关注', 'success')
-    } else {
-      showToast(response.message || '操作失败', 'error')
-    }
-  } catch (error) {
-    showToast('操作失败，请稍后重试', 'error')
+    await apiToggleFollow(noteDetail.value.user.id)
+    isFollowed.value = !isFollowed.value
+    showToast(isFollowed.value ? '关注成功' : '已取消关注', 'success')
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : '操作失败，请稍后重试'
+    showToast(errorMsg, 'error')
   }
 }
 </script>
@@ -1008,9 +1025,14 @@ const toggleFollow = async () => {
   white-space: nowrap;
 }
 
-.action-btn:hover {
+.action-btn:hover:not(:disabled) {
   background: #e5e5e5;
   transform: translateY(-1px);
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .action-btn.like-btn.active {

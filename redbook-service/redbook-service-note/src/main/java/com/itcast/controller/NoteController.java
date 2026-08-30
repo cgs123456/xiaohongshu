@@ -38,41 +38,70 @@ public class NoteController {
 
     @GetMapping("/getNoteListByLocation")
     public Result<List<NoteVo>> getNoteListByLocation(
-            @RequestParam("longitude") String longitude, @RequestParam("latitude") String latitude) {
+            @RequestParam("longitude") String longitude, @RequestParam("latitude") String latitude,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
         NoteStrategyContext context = NoteStrategyContext.builder()
                 .longitude(longitude)
                 .latitude(latitude)
+                .page(defaultPage(page))
+                .pageSize(defaultPageSize(pageSize))
                 .build();
         return noteService.getNotes(NoteStrategyType.BY_LOCATION, context);
     }
 
     @GetMapping("/getNoteListByOwn")
-    public Result<List<NoteVo>> getNoteListByOwn() {
-        NoteStrategyContext context = NoteStrategyContext.builder().build();
+    public Result<List<NoteVo>> getNoteListByOwn(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        NoteStrategyContext context = NoteStrategyContext.builder()
+                .page(defaultPage(page))
+                .pageSize(defaultPageSize(pageSize))
+                .build();
         return noteService.getNotes(NoteStrategyType.BY_OWN, context);
     }
 
     @GetMapping("/getNoteListByScan")
-    public Result<List<NoteVo>> getNoteListByScan() {
-        NoteStrategyContext context = NoteStrategyContext.builder().build();
+    public Result<List<NoteVo>> getNoteListByScan(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        NoteStrategyContext context = NoteStrategyContext.builder()
+                .page(defaultPage(page))
+                .pageSize(defaultPageSize(pageSize))
+                .build();
         return noteService.getNotes(NoteStrategyType.BY_SCAN, context);
     }
 
     @GetMapping("/getNoteListByAttention")
-    public Result<List<NoteVo>> getNoteListByAttention() {
-        NoteStrategyContext context = NoteStrategyContext.builder().build();
+    public Result<List<NoteVo>> getNoteListByAttention(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        NoteStrategyContext context = NoteStrategyContext.builder()
+                .page(defaultPage(page))
+                .pageSize(defaultPageSize(pageSize))
+                .build();
         return noteService.getNotes(NoteStrategyType.BY_ATTENTION, context);
     }
 
     @GetMapping("/getNoteByCollection")
-    public Result<List<NoteVo>> getNoteByCollection() {
-        NoteStrategyContext context = NoteStrategyContext.builder().build();
+    public Result<List<NoteVo>> getNoteByCollection(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        NoteStrategyContext context = NoteStrategyContext.builder()
+                .page(defaultPage(page))
+                .pageSize(defaultPageSize(pageSize))
+                .build();
         return noteService.getNotes(NoteStrategyType.BY_COLLECTION, context);
     }
 
     @GetMapping("/getNoteByLike")
-    public Result<List<NoteVo>> getNoteByLike() {
-        NoteStrategyContext context = NoteStrategyContext.builder().build();
+    public Result<List<NoteVo>> getNoteByLike(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        NoteStrategyContext context = NoteStrategyContext.builder()
+                .page(defaultPage(page))
+                .pageSize(defaultPageSize(pageSize))
+                .build();
         return noteService.getNotes(NoteStrategyType.BY_LIKE, context);
     }
 
@@ -132,5 +161,17 @@ public class NoteController {
         dto.setLike(0);
         dto.setCollection(0);
         return noteService.postNote(dto);
+    }
+
+    /**
+     * 分页参数默认值
+     */
+    private Integer defaultPage(Integer page) {
+        return (page == null || page < 1) ? 1 : page;
+    }
+
+    private Integer defaultPageSize(Integer pageSize) {
+        if (pageSize == null || pageSize < 1) return 20;
+        return Math.min(pageSize, 100);
     }
 }

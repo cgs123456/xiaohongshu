@@ -20,7 +20,7 @@ public class CouponController {
         return couponService.getCouponsByUserId();
     }
 
-    @GetMapping("/useCoupon/{couponId}")
+    @PostMapping("/useCoupon/{couponId}")
     public Result<Void> useCoupon(@PathVariable Long couponId) {
         return couponService.useCoupon(couponId);
     }

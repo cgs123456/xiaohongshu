@@ -43,6 +43,11 @@ public class AiSummaryHandler extends NoteHandler {
 
     private final Gson gson = new Gson();
 
+    /** HttpClient 静态复用，避免每次请求都新建 */
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
     @Override
     public void handle(NoteDto noteDto) throws IOException, InterruptedException {
         String title = noteDto.getTitle();
@@ -97,27 +102,31 @@ public class AiSummaryHandler extends NoteHandler {
     /** 调用 DeepSeek chat API（与 GetNoteTypeHandler 风格一致） */
     private String callDeepSeek(String userMessage) {
         try {
-            HttpClient httpClient = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .build();
-
-            String requestBody = String.format(
-                    "{ \"model\": \"deepseek-chat\", \"messages\": [ " +
-                    "{\"role\": \"system\", \"content\": \"You are a note summary assistant.\"}, " +
-                    "{\"role\": \"user\", \"content\": \"%s\"} " +
-                    "], \"temperature\": 0.3 }",
-                    userMessage.replace("\"", "\\\"").replace("\n", "\\n")
-            );
+            // 使用 Gson 构建 JSON 请求体（避免 String.format 手拼导致转义问题）
+            JsonObject requestBody = new JsonObject();
+            requestBody.addProperty("model", "deepseek-chat");
+            JsonArray messages = new JsonArray();
+            JsonObject systemMsg = new JsonObject();
+            systemMsg.addProperty("role", "system");
+            systemMsg.addProperty("content", "You are a note summary assistant.");
+            messages.add(systemMsg);
+            JsonObject userMsg = new JsonObject();
+            userMsg.addProperty("role", "user");
+            userMsg.addProperty("content", userMessage);
+            messages.add(userMsg);
+            requestBody.add("messages", messages);
+            requestBody.addProperty("temperature", 0.3);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl + "/chat/completions"))
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .timeout(Duration.ofSeconds(15))
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            // 复用静态 HttpClient
+            HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
                 JsonObject resp = gson.fromJson(response.body(), JsonObject.class);

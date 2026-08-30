@@ -8,6 +8,7 @@ import com.itcast.model.vo.ProductVo;
 import com.itcast.result.Result;
 import com.itcast.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,12 +17,19 @@ import java.util.List;
 @RequestMapping("/product")
 public class ProductController {
 
+    /**
+     * 内部接口令牌（order 服务调用 /helper/restoreStock 时需携带一致的令牌）
+     */
+    @Value("${internal.token:change-me-internal-token}")
+    private String internalToken;
+
     @Autowired
     private ProductService productService;
 
     @GetMapping("/getProductList")
-    public Result<List<Product>> getProductList() {
-        return productService.getProductList();
+    public Result<List<Product>> getProductList(@RequestParam(required = false) Integer page,
+                                                @RequestParam(required = false) Integer pageSize) {
+        return productService.getProductList(page, pageSize);
     }
 
     @GetMapping("/getProduct/{productId}")
@@ -49,6 +57,8 @@ public class ProductController {
         if (buyDto.getProductId() == null) {
             return Result.failure("商品ID不能为空");
         }
+        // 强制使用登录态中的userId，防止客户端伪造
+        buyDto.setUserId(UserContext.getUserId());
         return productService.buyProduct(buyDto);
     }
 
@@ -88,5 +98,38 @@ public class ProductController {
         buyDto.setProductId(productId);
         buyDto.setUserId(UserContext.getUserId());
         return productService.buyProduct(buyDto);
+    }
+
+    /**
+     * 库存回补接口（内部接口，供 order 服务订单超时关单后回补库存）
+     * 使用内部令牌校验，令牌由配置项 internal.token 提供，调用方需保持一致
+     */
+    /**
+     * 内部接口：按 id 查商品（供 order 服务下单链路使用，返回纯 Product 而非 ProductVo）
+     */
+    @GetMapping("/helper/getProductById/{productId}")
+    public Result<Product> helperGetProductById(@RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
+                                                @PathVariable Integer productId) {
+        if (internalToken == null || !internalToken.equals(this.internalToken)) {
+            return Result.failure("无效的内部令牌");
+        }
+        Product product = productService.selectById(productId);
+        if (product == null) {
+            return Result.failure("商品不存在");
+        }
+        return Result.success(product);
+    }
+
+    @PostMapping("/helper/restoreStock")
+    public Result<Void> restoreStock(@RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
+                                     @RequestParam("productId") Integer productId,
+                                     @RequestParam("quantity") Integer quantity) {
+        if (productId == null || quantity == null || quantity <= 0) {
+            return Result.failure("参数错误");
+        }
+        if (internalToken == null || !internalToken.equals(this.internalToken)) {
+            return Result.failure("无效的内部令牌");
+        }
+        return productService.restoreStock(productId, quantity);
     }
 }

@@ -3,10 +3,21 @@ server:
 spring:
   application:
     name: redbook-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   cloud:
     nacos:
       discovery:
-        server-addr: 123.206.101.247:8848
+        server-addr: ${NACOS_ADDR:localhost:8848}
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
     gateway:
       routes:
         # 用户服务路由
@@ -19,6 +30,18 @@ spring:
           uri: lb://redbook-service-note
           predicates:
             - Path=/note/**
+        # 商品下单接口路由（限流，需放在通配 /product/** 路由之前）
+        - id: redbook-service-product-buy
+          uri: lb://redbook-service-product
+          predicates:
+            - Path=/product/buyProduct
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                deny-empty-key: false
+                key-resolver: "#{@ipPathKeyResolver}"
         # 商品服务路由
         - id: redbook-service-product
           uri: lb://redbook-service-product
@@ -34,19 +57,32 @@ spring:
           uri: lb://redbook-service-comment
           predicates:
             - Path=/comment/**
-        # 搜索服务路由
+        # 搜索服务路由（限流）
         - id: redbook-service-search
           uri: lb://redbook-service-search
           predicates:
             - Path=/search/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                deny-empty-key: false
+                key-resolver: "#{@ipPathKeyResolver}"
         # AI服务路由
         - id: redbook-service-ai
           uri: lb://redbook-service-ai
           predicates:
             - Path=/ai/**
-        # WebSocket服务路由（使用Nacos服务发现）
-        - id: redbook-netty-websocket
-          uri: lb://redbook-netty-websocket
+        # 购物车路由（CartController 挂在 /cart 前缀下，与商品服务同进程）
+        - id: redbook-service-cart
+          uri: lb://redbook-service-product
+          predicates:
+            - Path=/cart/**
+        # WebSocket服务路由（message 服务通过 nacos.discovery.port=8888 把注册端口指向 Netty 端口；
+        # ws scheme 触发网关的 WebSocket 转发）
+        - id: redbook-service-message-ws
+          uri: lb:ws://redbook-service-message
           predicates:
             - Path=/ws/**
           filters:

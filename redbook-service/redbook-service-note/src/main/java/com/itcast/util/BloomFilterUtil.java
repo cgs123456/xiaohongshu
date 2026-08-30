@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class BloomFilterUtil {
-    private static final int BITMAP_SIZE = 100000;
+    // 9600000 bit ≈ 1.2MB，100 万元素量级下约 1% 误判率
+    private static final int BITMAP_SIZE = 9600000;
     private static final int[] HASH_SEED = new int[]{5,15,25,35,45};
 
     @Autowired

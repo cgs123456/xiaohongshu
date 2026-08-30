@@ -121,12 +121,13 @@
 
           <div class="modal-footer">
             <button class="btn btn-cancel" @click="handleClose">取消</button>
-            <button 
-              class="btn btn-confirm" 
-              :disabled="!product || !allAttributesSelected"
+            <button
+              class="btn btn-confirm"
+              :disabled="!product || !allAttributesSelected || loading"
               @click="handleConfirm"
             >
-              确认购买
+              <span v-if="loading">购买中...</span>
+              <span v-else>确认购买</span>
             </button>
           </div>
         </div>
@@ -184,9 +185,7 @@ const loadCoupons = async () => {
   try {
     loadingCoupons.value = true
     const response = await getCouponsByUserId()
-    if (response.code === 200 && response.data) {
-      coupons.value = response.data
-    }
+    coupons.value = response.data || []
   } catch (error) {
     // 加载优惠券失败
   } finally {
@@ -278,31 +277,28 @@ const handleConfirm = async () => {
       })
     }
     
-    // 调用购买接口
-    const response = await buyProduct({
+    // 调用购买接口（业务错误已由拦截器统一 reject）
+    await buyProduct({
       productId: props.product.id,
       selectAttributes,
       couponId: selectedCouponId.value || undefined
     })
-    
-    if (response.code === 200) {
-      // 购买成功后，如果使用了优惠券，调用使用优惠券接口
-      if (selectedCouponId.value) {
-        try {
-          await useCoupon(selectedCouponId.value)
-        } catch (error) {
-          // 优惠券使用失败不影响购买成功的提示
-        }
+
+    // 购买成功后，如果使用了优惠券，调用使用优惠券接口
+    if (selectedCouponId.value) {
+      try {
+        await useCoupon(selectedCouponId.value)
+      } catch (error) {
+        // 优惠券使用失败不影响购买成功的提示
       }
-      
-      showToast('购买成功！', 'success')
-      emit('success')
-      handleClose()
-    } else {
-      showToast(response.message || '购买失败', 'error')
     }
-  } catch (error) {
-    showToast('购买失败，请稍后重试', 'error')
+
+    showToast('购买成功！', 'success')
+    emit('success')
+    handleClose()
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : '购买失败，请稍后重试'
+    showToast(errorMsg, 'error')
   } finally {
     loading.value = false
   }

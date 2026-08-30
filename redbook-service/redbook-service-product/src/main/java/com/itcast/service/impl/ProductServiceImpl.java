@@ -64,7 +64,23 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Result<List<Product>> getProductList() {
-        List<Product> products = productMapper.selectList(null);
+        return getProductList(null, null);
+    }
+
+    @Override
+    public Result<List<Product>> getProductList(Integer page, Integer pageSize) {
+        // 不传分页参数时返回全部，兼容现状
+        if (page == null || pageSize == null) {
+            List<Product> products = productMapper.selectList(null);
+            return Result.success(products);
+        }
+        if (page < 1 || pageSize < 1 || pageSize > 100) {
+            return Result.failure("分页参数错误");
+        }
+        // 使用 LIMIT/OFFSET 分页（page/pageSize 已校验为整数，无注入风险）
+        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
+        wrapper.last("LIMIT " + pageSize + " OFFSET " + (long) (page - 1) * pageSize);
+        List<Product> products = productMapper.selectList(wrapper);
         return Result.success(products);
     }
 
@@ -140,15 +156,30 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Result<Void> buyProduct(BuyDto buyDto) {
+        // 0.校验购买数量（默认1，允许范围 1~999）
+        Integer quantity = buyDto.getQuantity();
+        if (quantity == null) {
+            quantity = 1;
+        }
+        if (quantity < 1 || quantity > 999) {
+            return Result.failure("购买数量必须在1-999之间");
+        }
+        buyDto.setQuantity(quantity);
+
         String key = RedisConstant.PRODUCT_STOCK_CACHE + buyDto.getProductId();
 
-        // 0.使用分布式锁做缓存预热
+        // 1.使用分布式锁做缓存预热（tryLock防止长时间阻塞）
         RLock lock = redissonClient.getLock("buyProduct:" + buyDto.getProductId());
+        boolean locked = false;
         try {
-            lock.lock();
-            // 1.判断redis中是否存在库存
+            locked = lock.tryLock(3, TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("获取缓存预热锁失败，productId={}", buyDto.getProductId());
+                return Result.failure("系统繁忙，请稍后重试");
+            }
+            // 2.判断redis中是否存在库存
             if (!redisTemplate.hasKey(key)) {
-                // 2.将库存预热缓存在redis中
+                // 将库存预热缓存在redis中
                 Product product = productMapper.selectById(buyDto.getProductId());
                 if (product == null) {
                     return Result.failure("商品不存在");
@@ -157,11 +188,17 @@ public class ProductServiceImpl implements ProductService {
                 redisTemplate.opsForValue().set(key, stock);
                 redisTemplate.expire(key, 60 * 60 * 24, TimeUnit.SECONDS);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("获取缓存预热锁被中断，productId={}", buyDto.getProductId(), e);
+            return Result.failure("系统繁忙，请稍后重试");
         } catch (Exception e) {
-            log.error("缓存击穿");
-            return Result.failure("商品已售罄");
+            log.error("缓存预热异常，productId={}", buyDto.getProductId(), e);
+            return Result.failure("系统繁忙，请稍后重试");
         } finally {
-            lock.unlock();
+            if (locked) {
+                lock.unlock();
+            }
         }
 
         // 3.使用lua脚本保证判断库存数量和减库存的原子性
@@ -170,7 +207,7 @@ public class ProductServiceImpl implements ProductService {
                 "    return -2; " +  // 库存不存在
                 "end " +
                 "stock = tonumber(stock); " +
-                "local quantity = tonumber(ARGV[1]); " +  // ARGV[1]应该是要购买的数量
+                "local quantity = tonumber(ARGV[1]); " +  // ARGV[1]是要购买的数量
                 "if stock >= quantity then " +
                 "    redis.call('decrby', KEYS[1], quantity); " +
                 "    return stock - quantity; " +  // 返回剩余库存
@@ -178,16 +215,21 @@ public class ProductServiceImpl implements ProductService {
                 "    return -1; " +  // 库存不足
                 "end";
         RedisScript<Long> script = RedisScript.of(luaScript, Long.class);
-        Long result = redisTemplate.execute(script, Collections.singletonList(key), 1L);
-        if (result == -1) {
+        Long result = redisTemplate.execute(script, Collections.singletonList(key), quantity.longValue());
+        if (result == null || result < 0) {
+            // -1库存不足 / -2库存key不存在，统一按库存不足处理
             return Result.failure("库存不足");
         }
 
-        // 4.异步更新mysql中的库存
-        rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", buyDto.getProductId());
+        // 4.异步更新mysql中的库存（消息携带购买数量，由消费端原子条件扣减）
+        rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", buyDto);
 
-        // 5.发送消息给订单服务
-        rabbitTemplate.convertAndSend(MqConstant.SAVE_ORDER_EXCHANGE, "", buyDto);
+        // 5.发送消息给订单服务（MessagePostProcessor设置UUID messageId，用于order服务幂等）
+        org.springframework.amqp.core.MessagePostProcessor messagePostProcessor = msg -> {
+            msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
+            return msg;
+        };
+        rabbitTemplate.convertAndSend(MqConstant.SAVE_ORDER_EXCHANGE, "", buyDto, messagePostProcessor);
 
         return Result.success(null);
     }
@@ -243,5 +285,30 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public void updateById(Product product) {
         productMapper.updateById(product);
+    }
+
+    @Override
+    public Result<Void> restoreStock(Integer productId, Integer quantity) {
+        if (productId == null || quantity == null || quantity <= 0) {
+            return Result.failure("参数错误");
+        }
+        try {
+            // 1.MySQL原子加库存
+            int rows = productMapper.restoreStock(productId, quantity);
+            if (rows == 0) {
+                log.error("回补库存失败，商品不存在，productId={} quantity={}", productId, quantity);
+                return Result.failure("商品不存在");
+            }
+            // 2.Redis同步加库存（key与buyProduct的库存key完全一致；key不存在时先预热）
+            String key = RedisConstant.PRODUCT_STOCK_CACHE + productId;
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+                redisTemplate.opsForValue().increment(key, quantity);
+            }
+            log.info("回补库存成功，productId={} quantity={}", productId, quantity);
+            return Result.success(null);
+        } catch (Exception e) {
+            log.error("回补库存异常，productId={} quantity={}", productId, quantity, e);
+            return Result.failure("回补库存失败");
+        }
     }
 }

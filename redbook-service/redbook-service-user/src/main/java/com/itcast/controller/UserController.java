@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/user")
@@ -27,6 +28,14 @@ public class UserController {
     @GetMapping("/getUserById/{userId}")
     public Result<User> getUserById(@PathVariable Integer userId) {
         return userService.getUserById(userId);
+    }
+
+    /**
+     * 批量查询用户（ids 为逗号分隔，如 /user/getUserByIds?ids=1,2,3）
+     */
+    @GetMapping("/getUserByIds")
+    public Result<List<User>> getUserByIds(@RequestParam("ids") List<Integer> ids) {
+        return userService.getUserByIds(ids);
     }
 
     @PostMapping("/updateImage")

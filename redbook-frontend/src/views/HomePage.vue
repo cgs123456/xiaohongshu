@@ -29,7 +29,18 @@
           <Icon icon="mdi:loading" class="loading-icon" width="48" />
           <p>加载中...</p>
         </div>
-        
+
+        <div v-else-if="loadFailed && notes.length === 0" class="empty-container">
+          <Icon icon="mdi:wifi-off" width="64" />
+          <p>加载失败，请检查网络后重试</p>
+          <button class="retry-btn" @click="retryLoad">重新加载</button>
+        </div>
+
+        <div v-else-if="notes.length === 0" class="empty-container">
+          <Icon icon="mdi:note-text-outline" width="64" />
+          <p>暂无内容</p>
+        </div>
+
         <div v-else class="waterfall-columns">
           <div class="waterfall-column" v-for="(column, index) in columns" :key="index">
             <div class="note-card" v-for="note in column" :key="note.id" @click="openNoteDetail(note)">
@@ -91,6 +102,7 @@ import LoginModal from '../components/LoginModal.vue'
 import NoteDetailModal from '../components/NoteDetailModal.vue'
 import { getNoteList, type NoteVo } from '../api/note'
 import { useToast } from '../composables/useToast'
+import { withThumb } from '../utils/image'
 
 const { showToast } = useToast()
 
@@ -114,6 +126,7 @@ const showDetailModal = ref(false)
 const selectedNoteId = ref<string | null>(null)
 const notes = ref<Note[]>([])
 const loading = ref(false)
+const loadFailed = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const activeCategory = ref('推荐')
@@ -147,20 +160,20 @@ const calculateHeight = (index: number): number => {
 const convertNoteData = (noteVo: NoteVo, index: number): Note => {
   // 从嵌套的 note 对象中获取数据
   const noteData = noteVo.note
-  
+
   // 获取作者信息
   const authorName = noteVo.user?.nickname || noteVo.user?.username || '匿名用户'
   // 将 ID 转换为数字用于生成头像（如果 ID 是纯数字字符串）
   const numericId = parseInt(noteData.id) || index
   const authorAvatar = noteVo.user?.image || `https://i.pravatar.cc/150?img=${(numericId % 70) + 1}`
-  
-  // 确保使用真实的 ID
-  if (!noteData.id) {
-  }
-  
+
+  // 后端多图逗号分隔，卡片取第一张，并应用 OSS 缩略图
+  const firstImage = noteData.image?.split(',')[0] || ''
+  const cardImage = withThumb(firstImage, 400) || `https://picsum.photos/300/${calculateHeight(index)}?random=${numericId}`
+
   return {
     id: noteData.id, // 使用真实的后端 ID（string 类型）
-    image: noteData.image || `https://picsum.photos/300/${calculateHeight(index)}?random=${numericId}`,
+    image: cardImage,
     title: noteData.title || '无标题',
     content: noteData.content,
     author: authorName,
@@ -187,34 +200,38 @@ const openNoteDetail = (note: Note) => {
   showDetailModal.value = true
 }
 
-// 加载笔记列表
+// 加载笔记列表（追加模式）
 const loadNotes = async () => {
   if (loading.value || !hasMore.value) return
 
+  const page = currentPage.value
+
   try {
     loading.value = true
-    const response = await getNoteList(currentPage.value, pageSize.value)
+    const response = await getNoteList(page, pageSize.value)
+    const newNotes = (response.data || []).map((note, index) => convertNoteData(note, index))
 
-    if (response.code === 200 && response.data) {
-      const newNotes = response.data.map((note, index) => convertNoteData(note, index))
-      notes.value = [...notes.value, ...newNotes]
-      layoutWaterfall()
-      
-      // 如果返回的数据少于每页数量，说明没有更多数据了
-      if (response.data.length < pageSize.value) {
-        hasMore.value = false
-      }
+    // 第一页时清空列表，后续页追加
+    if (page === 1) {
+      notes.value = newNotes
     } else {
-      // 如果后端接口失败，使用模拟数据
-      if (currentPage.value === 1) {
-        loadMockData()
-      }
-      hasMore.value = false
+      notes.value = [...notes.value, ...newNotes]
     }
-  } catch (error) {
-    // 如果请求失败，使用模拟数据
-    if (currentPage.value === 1) {
-      loadMockData()
+    layoutWaterfall()
+
+    // 后端返回空数组或不足一页时停止加载
+    if (newNotes.length === 0 || newNotes.length < pageSize.value) {
+      hasMore.value = false
+    } else {
+      // 请求成功后才翻页，避免失败/空响应时跳页
+      currentPage.value = page + 1
+    }
+    loadFailed.value = false
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : '网络错误，请稍后重试'
+    showToast(errorMsg, 'error')
+    if (notes.value.length === 0) {
+      loadFailed.value = true
     }
     hasMore.value = false
   } finally {
@@ -222,17 +239,35 @@ const loadNotes = async () => {
   }
 }
 
-// 无限滚动处理
+// 失败后重新加载
+const retryLoad = () => {
+  loadFailed.value = false
+  currentPage.value = 1
+  hasMore.value = true
+  loadNotes()
+}
+
+// 滚动节流：requestAnimationFrame + 200ms 时间戳节流
+let scrollTicking = false
+let lastScrollTime = 0
 const handleScroll = () => {
-  const scrollTop = document.documentElement.scrollTop
-  const windowHeight = window.innerHeight
-  const documentHeight = document.documentElement.scrollHeight
-  
-  // 距离底部 200px 时触发加载
-  if (documentHeight - scrollTop - windowHeight < 200) {
-    currentPage.value++
-    loadNotes()
-  }
+  const now = Date.now()
+  if (scrollTicking || now - lastScrollTime < 200) return
+
+  scrollTicking = true
+  window.requestAnimationFrame(() => {
+    scrollTicking = false
+    lastScrollTime = Date.now()
+
+    const scrollTop = document.documentElement.scrollTop
+    const windowHeight = window.innerHeight
+    const documentHeight = document.documentElement.scrollHeight
+
+    // 距离底部 200px 时触发加载
+    if (documentHeight - scrollTop - windowHeight < 200) {
+      loadNotes()
+    }
+  })
 }
 
 // 切换分类
@@ -242,126 +277,16 @@ const switchCategory = (category: string) => {
   notes.value = []
   currentPage.value = 1
   hasMore.value = true
+  loadFailed.value = false
   loadNotes()
 }
 
-// 加载模拟数据（作为后备方案）
-const loadMockData = () => {
-  const mockNotes: Note[] = [
-    {
-      id: '1',
-      image: 'https://picsum.photos/300/400?random=1',
-      title: '分享我家的装修风格！超喜欢这个飘窗设计',
-      author: '王小美',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-      likes: '1.7k',
-      height: 400
-    },
-    {
-      id: '2',
-      image: 'https://picsum.photos/300/500?random=2',
-      title: '三口之家的幸福时光🌸这样的周末太治愈了',
-      author: '幸福一家人',
-      avatar: 'https://i.pravatar.cc/150?img=2',
-      likes: '3.2k',
-      tag: '生活',
-      height: 500
-    },
-    {
-      id: '3',
-      image: 'https://picsum.photos/300/350?random=3',
-      title: '💍 100万打造的婚礼现场！每个细节都超满意',
-      author: '婚礼之家',
-      avatar: 'https://i.pravatar.cc/150?img=3',
-      likes: '5.1k',
-      height: 350
-    },
-    {
-      id: '4',
-      image: 'https://picsum.photos/300/450?random=4',
-      title: '把白娘子送到法国庄园🏰 这波操作绝了',
-      author: '旅游达人',
-      avatar: 'https://i.pravatar.cc/150?img=4',
-      likes: '8.9k',
-      tag: '旅行',
-      height: 450
-    },
-    {
-      id: '5',
-      image: 'https://picsum.photos/300/380?random=5',
-      title: '最爱拉丝奶酪🧀️ 这家店的芝士真的太绝了',
-      author: '美食探店',
-      avatar: 'https://i.pravatar.cc/150?img=5',
-      likes: '2.3k',
-      height: 380
-    },
-    {
-      id: '6',
-      image: 'https://picsum.photos/300/420?random=6',
-      title: '美妆分享｜让皮肤变好的秘密都在这里了',
-      author: '李美妆',
-      avatar: 'https://i.pravatar.cc/150?img=6',
-      likes: '1.8k',
-      height: 420
-    },
-    {
-      id: '7',
-      image: 'https://picsum.photos/300/360?random=7',
-      title: '二次元手办开箱！这个原神花散里太可爱了',
-      author: '动漫爱好者',
-      avatar: 'https://i.pravatar.cc/150?img=7',
-      likes: '1.0k',
-      height: 360
-    },
-    {
-      id: '8',
-      image: 'https://picsum.photos/300/480?random=8',
-      title: '今天的穿搭分享💃 马卡龙色系超显白',
-      author: '穿搭博主',
-      avatar: 'https://i.pravatar.cc/150?img=8',
-      likes: '1.5k',
-      height: 480
-    },
-    {
-      id: '9',
-      image: 'https://picsum.photos/300/390?random=9',
-      title: '不用烤箱也能做的甜品！新手必看',
-      author: 'Super_Caroline',
-      avatar: 'https://i.pravatar.cc/150?img=9',
-      likes: '1.9k',
-      height: 390
-    },
-    {
-      id: '10',
-      image: 'https://picsum.photos/300/440?random=10',
-      title: '屏蔽国人吧，真的受够了他们的素质',
-      author: '海外华人',
-      avatar: 'https://i.pravatar.cc/150?img=10',
-      likes: '6.0k',
-      tag: '热门',
-      height: 440
-    },
-    {
-      id: '11',
-      image: 'https://picsum.photos/300/370?random=11',
-      title: '极简风格的家居设计，住进去太舒服了',
-      author: '家居设计师',
-      avatar: 'https://i.pravatar.cc/150?img=11',
-      likes: '2.7k',
-      height: 370
-    },
-    {
-      id: '12',
-      image: 'https://picsum.photos/300/460?random=12',
-      title: '秋天的第一杯奶茶🍂 这家店必须安利',
-      author: '奶茶爱好者',
-      avatar: 'https://i.pravatar.cc/150?img=12',
-      likes: '3.4k',
-      height: 460
-    }
-  ]
-  notes.value = mockNotes
-  layoutWaterfall()
+// 发布成功后刷新列表
+const handleNotePublished = () => {
+  currentPage.value = 1
+  hasMore.value = true
+  loadFailed.value = false
+  loadNotes()
 }
 
 // 检查登录状态
@@ -377,6 +302,7 @@ const handleLoginSuccess = () => {
   // 登录成功后重新加载笔记列表
   notes.value = []
   currentPage.value = 1
+  hasMore.value = true
   loadNotes()
 }
 
@@ -384,7 +310,7 @@ const handleLoginSuccess = () => {
 const layoutWaterfall = () => {
   const columnHeights = [0, 0, 0, 0]
   columns.value = [[], [], [], []]
-  
+
   notes.value.forEach(note => {
     const minHeight = Math.min(...columnHeights)
     const minIndex = columnHeights.indexOf(minHeight)
@@ -397,10 +323,12 @@ onMounted(() => {
   checkLoginStatus()
   loadNotes()
   window.addEventListener('scroll', handleScroll)
+  window.addEventListener('note:published', handleNotePublished)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('note:published', handleNotePublished)
 })
 </script>
 
@@ -484,6 +412,37 @@ onUnmounted(() => {
   justify-content: center;
   padding: 60px 20px;
   color: #999;
+}
+
+.empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: #999;
+}
+
+.empty-container p {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.retry-btn {
+  margin-top: 16px;
+  padding: 8px 28px;
+  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.retry-btn:hover {
+  opacity: 0.85;
 }
 
 .loading-icon {

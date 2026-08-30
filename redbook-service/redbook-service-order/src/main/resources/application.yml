@@ -6,19 +6,26 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 123.206.101.247:8848
+        server-addr: ${NACOS_ADDR:localhost:8848}
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://121.37.250.15:3306/rb_order?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/rb_order?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:your_db_password}
-  redis:
-    host: 121.37.250.15
-    port: 6379
-    password: ${REDIS_PASSWORD:your_redis_password}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:your_redis_password}
   rabbitmq:
-    host: 123.206.101.247
-    port: 5672
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:admin}
     password: ${RABBITMQ_PASSWORD:your_rabbitmq_password}
     virtual-host: /
@@ -35,3 +42,7 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
+
+# 内部接口令牌（与 product 服务 internal.token 保持一致）
+internal:
+  token: ${INTERNAL_TOKEN:change-me-internal-token}
