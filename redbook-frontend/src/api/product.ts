@@ -73,11 +73,9 @@ export const getProductsByShop = (productId: number) => {
     return request.get<void, ApiResponse<Product[]>>(`/product/getProductsByShop/${productId}`)
 }
 
-// 搜索推荐
-export const recommend = (search: string) => {
-    return request.get<void, ApiResponse<string[]>>('/product/recommend', {
-        params: { search }
-    })
+// 推荐商品（后端返回库存>0 的商品，按 id 倒序前 10 个）
+export const getRecommendProducts = () => {
+    return request.get<void, ApiResponse<Product[]>>('/product/recommend')
 }
 
 // 立即购买
@@ -95,12 +93,16 @@ export const useCoupon = (couponId: number) => {
     return request.post<void, ApiResponse<void>>(`/product/useCoupon/${couponId}`)
 }
 
-// AI 聊天接口（通过 product 服务代理）
+// AI 购物助手多轮对话（后端 AgentChatRequest{conversationId, message}，
+// 带 conversationId 可维持多轮上下文；不传则后端每条消息独立成新会话）
+let agentConversationId = ''
 export const chatWithAgent = (message: string) => {
-    return request.post<void, ApiResponse<string>>('/product/agent/buyProduct', message, {
-        headers: {
-            'Content-Type': 'text/plain'
-        }
+    if (!agentConversationId) {
+        agentConversationId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+    }
+    return request.post<void, ApiResponse<string>>('/product/agent/chat', {
+        conversationId: agentConversationId,
+        message
     })
 }
 
