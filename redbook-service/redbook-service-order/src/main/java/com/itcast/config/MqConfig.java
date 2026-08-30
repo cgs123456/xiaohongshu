@@ -11,6 +11,9 @@ import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Slf4j
 @Configuration
 public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.ReturnsCallback {

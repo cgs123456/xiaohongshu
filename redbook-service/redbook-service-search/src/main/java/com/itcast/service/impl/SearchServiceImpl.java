@@ -6,6 +6,7 @@ import com.itcast.context.UserContext;
 import com.itcast.mapper.HistoryMapper;
 import com.itcast.model.pojo.History;
 import com.itcast.model.pojo.Note;
+import com.itcast.model.pojo.User;
 import com.itcast.model.vo.NoteVo;
 import com.itcast.result.Result;
 import com.itcast.service.EmbeddingService;

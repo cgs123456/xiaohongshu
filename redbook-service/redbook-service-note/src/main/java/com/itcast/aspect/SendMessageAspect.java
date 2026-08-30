@@ -68,13 +68,18 @@ public class SendMessageAspect {
                 break;
         }
 
+        if (behaviorMessage == null) {
+            return;
+        }
+        // lambda 只能捕获事实最终变量，拷贝一份供异步发送使用
+        final BehaviorMessage messageToSend = behaviorMessage;
         try {
             log.info("【用户行为日志】用户[id={}]对笔记[id={}]执行了{}操作", userId, noteId, type);
             // 若方法处于事务中（如 like 带 @Transactional），延后到事务提交后再发 Kafka，
             // 避免事务回滚后仍产生脏行为日志；无事务时直接发送
             Runnable sendTask = () -> {
                 try {
-                    kafkaTemplate.send(KafkaConfig.USER_BEHAVIOR_LOG_TOPIC, objectMapper.writeValueAsString(behaviorMessage));
+                    kafkaTemplate.send(KafkaConfig.USER_BEHAVIOR_LOG_TOPIC, objectMapper.writeValueAsString(messageToSend));
                 } catch (JsonProcessingException e) {
                     log.error("序列化用户行为日志失败 noteId:{} userId:{}", noteId, userId, e);
                 }
