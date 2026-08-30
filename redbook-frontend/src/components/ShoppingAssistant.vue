@@ -18,8 +18,8 @@
           <!-- 消息列表 -->
           <div class="chat-messages" ref="messagesContainer">
             <div 
-              v-for="(message, index) in messages" 
-              :key="index"
+              v-for="message in messages" 
+              :key="message.id"
               class="message-item"
               :class="{ 'user-message': message.type === 'user', 'assistant-message': message.type === 'assistant' }"
             >
@@ -77,6 +77,7 @@ import { Icon } from '@iconify/vue'
 import { chatWithAgent } from '../api/product'
 
 interface Message {
+  id: number
   type: 'user' | 'assistant'
   text: string
   time: string
@@ -95,11 +96,29 @@ const emit = defineEmits<Emits>()
 
 const messages = ref<Message[]>([
   {
+    id: 0,
     type: 'assistant',
     text: '您好！我是购物助手，有什么可以帮您的吗？',
     time: getCurrentTime()
   }
 ])
+
+// 消息唯一 id（用于 :key）与上限控制
+let nextMessageId = 1
+const MAX_MESSAGES = 100
+
+// 追加 AI 回复消息（带 100 条上限，超出移除最早的消息）
+function pushAssistantMessage(text: string) {
+  messages.value.push({
+    id: nextMessageId++,
+    type: 'assistant',
+    text,
+    time: getCurrentTime()
+  })
+  if (messages.value.length > MAX_MESSAGES) {
+    messages.value.splice(0, messages.value.length - MAX_MESSAGES)
+  }
+}
 const inputText = ref('')
 const loading = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -131,6 +150,7 @@ async function sendMessage() {
   if (!inputText.value.trim() || loading.value) return
 
   const userMessage: Message = {
+    id: nextMessageId++,
     type: 'user',
     text: inputText.value,
     time: getCurrentTime()
@@ -153,17 +173,9 @@ async function sendMessage() {
       ? response.data 
       : '抱歉，我暂时无法回答这个问题。'
     
-    messages.value.push({
-      type: 'assistant',
-      text: replyText,
-      time: getCurrentTime()
-    })
-  } catch (error) {
-    messages.value.push({
-      type: 'assistant',
-      text: '抱歉，服务暂时不可用，请稍后再试。',
-      time: getCurrentTime()
-    })
+    pushAssistantMessage(replyText)
+  } catch {
+    pushAssistantMessage('抱歉，服务暂时不可用，请稍后再试。')
   } finally {
     loading.value = false
     nextTick(() => {

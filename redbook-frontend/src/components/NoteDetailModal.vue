@@ -134,6 +134,7 @@
                 
                 <div class="input-wrapper">
                   <input
+                    ref="commentInputRef"
                     v-model="commentInput"
                     type="text"
                     :placeholder="replyingTo ? '输入回复内容...' : '说点什么...'"
@@ -179,7 +180,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
 import DOMPurify from 'dompurify'
 import { getNoteDetail, toggleLike as apiToggleLike, checkIsLiked, toggleCollection as apiToggleCollection, checkIsCollected, type NoteVo } from '../api/note'
@@ -204,6 +205,7 @@ const emit = defineEmits<Emits>()
 const noteDetail = ref<NoteVo | null>(null)
 const loading = ref(false)
 const commentInput = ref('')
+const commentInputRef = ref<HTMLInputElement | null>(null)
 const isLiked = ref(false)
 const isCollected = ref(false)
 const isFollowed = ref(false)
@@ -464,11 +466,10 @@ const submitComment = async () => {
 const replyToComment = (commentVo: CommentVo) => {
   replyingTo.value = commentVo
   commentInput.value = `@${commentVo.user?.nickname || commentVo.user?.username || '匿名用户'} `
-  // 聚焦到输入框
-  const inputElement = document.querySelector('.comment-input') as HTMLInputElement
-  if (inputElement) {
-    inputElement.focus()
-  }
+  // 聚焦到输入框（ref + nextTick，避免 querySelector 在多实例/条件渲染下错乱）
+  nextTick(() => {
+    commentInputRef.value?.focus()
+  })
 }
 
 // 取消回复

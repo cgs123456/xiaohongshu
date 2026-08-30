@@ -1,7 +1,6 @@
 package com.itcast.strategy.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.itcast.client.UserClient;
 import com.itcast.component.UserBatchLoader;
 import com.itcast.context.UserContext;
 import com.itcast.mapper.LikeMapper;
@@ -30,9 +29,6 @@ public class GetNoteListByLike implements GetNotesStrategy {
 
     @Autowired
     private NoteMapper noteMapper;
-
-    @Autowired
-    private UserClient userClient;
 
     @Autowired
     private UserBatchLoader userBatchLoader;

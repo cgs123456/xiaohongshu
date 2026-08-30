@@ -70,7 +70,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
+import { useToast } from '../composables/useToast'
 import { Icon } from '@iconify/vue'
 import { getProduct, type ProductVo, type Product, type CustomAttribute } from '../api/product'
 
@@ -88,6 +89,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+const { showToast } = useToast()
 const loading = ref(false)
 const productDetail = ref<ProductVo | null>(null)
 
@@ -107,19 +109,25 @@ const loadProductDetail = async (productId: number) => {
       productDetail.value = response.data
     }
   } catch (error) {
-    // 加载商品详情失败
+    showToast(error instanceof Error ? error.message : '商品详情加载失败', 'error')
   } finally {
     loading.value = false
   }
 }
 
-// 关闭弹窗
+// 关闭弹窗（记录 timer，组件卸载时清理）
+let clearDetailTimer: ReturnType<typeof setTimeout> | null = null
 const handleClose = () => {
   emit('update:visible', false)
-  setTimeout(() => {
+  if (clearDetailTimer) clearTimeout(clearDetailTimer)
+  clearDetailTimer = setTimeout(() => {
     productDetail.value = null
   }, 300)
 }
+
+onUnmounted(() => {
+  if (clearDetailTimer) clearTimeout(clearDetailTimer)
+})
 
 // 加入购物车
 const handleAddToCart = () => {

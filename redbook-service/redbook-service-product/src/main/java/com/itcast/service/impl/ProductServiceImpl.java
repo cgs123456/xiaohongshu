@@ -68,6 +68,16 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public Result<List<Product>> recommend(int limit) {
+        List<Product> products = productMapper.selectList(
+                new LambdaQueryWrapper<Product>()
+                        .gt(Product::getStock, 0)
+                        .orderByDesc(Product::getId)
+                        .last("LIMIT " + Math.min(Math.max(limit, 1), 50)));
+        return Result.success(products);
+    }
+
+    @Override
     public Result<List<Product>> getProductList(Integer page, Integer pageSize) {
         // 不传分页参数时返回全部，兼容现状
         if (page == null || pageSize == null) {
@@ -268,6 +278,11 @@ public class ProductServiceImpl implements ProductService {
             LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
             wrapper.last("LIMIT 20");
             return Result.success(productMapper.selectList(wrapper));
+        }
+        // 关键词超长截断，防超长字符串造成全表模糊扫描
+        keyword = keyword.trim();
+        if (keyword.length() > 50) {
+            keyword = keyword.substring(0, 50);
         }
         LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(Product::getName, keyword)

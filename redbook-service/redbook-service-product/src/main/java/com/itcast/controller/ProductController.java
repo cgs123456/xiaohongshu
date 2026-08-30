@@ -32,6 +32,14 @@ public class ProductController {
         return productService.getProductList(page, pageSize);
     }
 
+    /**
+     * 推荐商品（前端商城页调用）：取库存>0 的商品按 id 倒序前 10 个
+     */
+    @GetMapping("/recommend")
+    public Result<List<Product>> recommend() {
+        return productService.recommend(10);
+    }
+
     @GetMapping("/getProduct/{productId}")
     public Result<ProductVo> getProduct(@PathVariable Integer productId) {
         return productService.getProduct(productId);

@@ -227,19 +227,21 @@ const selectedCouponDiscount = computed(() => {
   if (coupon.type === '1') {
     return coupon.discount
   }
-  // 类型2：折扣券，计算折扣后的优惠金额
+  // 类型2：折扣券，计算折扣后的优惠金额（用"分"计算避免浮点精度误差）
   if (coupon.type === '2') {
     const discountRate = coupon.discount / 10 // 例如：8折 = 0.8
-    return props.product.price * (1 - discountRate)
+    const priceCents = Math.round(props.product.price * 100)
+    return (priceCents - Math.round(priceCents * discountRate)) / 100
   }
   return 0
 })
 
-// 计算最终价格
+// 计算最终价格（用"分"计算避免浮点精度误差，如 0.1+0.2）
 const finalPrice = computed(() => {
   if (!props.product) return 0
-  const price = props.product.price - selectedCouponDiscount.value
-  return Math.max(price, 0).toFixed(2)
+  const priceCents = Math.round(props.product.price * 100)
+  const discountCents = Math.round(selectedCouponDiscount.value * 100)
+  return (Math.max(priceCents - discountCents, 0) / 100).toFixed(2)
 })
 
 // 检查是否所有属性都已选择

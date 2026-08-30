@@ -57,7 +57,7 @@ public class SaveNoteToEsHandler extends NoteHandler {
         if (noteDto.getId() != null) {
             try {
                 NoteEs noteEs = new NoteEs();
-                noteEs.setId(Math.toIntExact(noteDto.getId()));
+                noteEs.setId(String.valueOf(noteDto.getId()));
                 elasticsearchOperations.delete(noteEs);
                 log.info("补偿操作：已从 ES 删除笔记，noteId: {}", noteDto.getId());
             } catch (Exception e) {

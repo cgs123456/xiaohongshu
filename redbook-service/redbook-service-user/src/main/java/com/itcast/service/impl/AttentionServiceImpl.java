@@ -87,6 +87,7 @@ public class AttentionServiceImpl implements AttentionService {
             Attention attention = new Attention();
             attention.setOwnId(ownId);
             attention.setOtherId(otherId);
+            attention.setTime(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date()));
             try {
                 attentionMapper.insert(attention);
             } catch (DuplicateKeyException e) {
@@ -113,6 +114,16 @@ public class AttentionServiceImpl implements AttentionService {
         LambdaQueryWrapper<Attention> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Attention::getOwnId, userId);
         List<Attention> attentionList = attentionMapper.selectList(queryWrapper);
+        // 回填 Redis Set（ATTENTION_CACHE + ownId），保证 Redis 重启/数据丢失后 isAttention 仍正确
+        if (!attentionList.isEmpty()) {
+            Object[] otherIds = attentionList.stream()
+                    .map(Attention::getOtherId)
+                    .filter(java.util.Objects::nonNull)
+                    .toArray();
+            if (otherIds.length > 0) {
+                redisTemplate.opsForSet().add(RedisConstant.ATTENTION_CACHE + userId, otherIds);
+            }
+        }
         return Result.success(attentionList);
     }
 }

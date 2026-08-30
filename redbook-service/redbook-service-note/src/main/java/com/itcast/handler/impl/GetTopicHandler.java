@@ -29,16 +29,20 @@ public class GetTopicHandler extends NoteHandler {
     // #(\S+)：话题之间无需强制空格分隔，其余文本交由后续 span 替换处理
     private final Pattern pattern = Pattern.compile("#(\\S+)");
 
-    // 记录创建的新话题ID和更新的旧话题（topicId -> oldHot），用于补偿
-    private final ThreadLocal<Map<Integer, Integer>> topicCompensationData = ThreadLocal.withInitial(HashMap::new);
-
     @Autowired
     private TopicMapper topicMapper;
 
     @Override
     public void handle(NoteDto noteDto) throws IOException, InterruptedException {
-        // 清空补偿数据
-        topicCompensationData.get().clear();
+        // 记录创建的新话题ID和更新的旧话题（topicId -> oldHot），用于补偿。
+        // 存放在请求级 NoteDto 上（而非 ThreadLocal）：成功路径随 dto 一起销毁无线程残留，
+        // 失败路径 compensate 仍能取到数据完成回滚
+        Map<Integer, Integer> compensationData =
+                noteDto.getTopicCompensationData() == null
+                        ? new HashMap<>()
+                        : noteDto.getTopicCompensationData();
+        compensationData.clear();
+        noteDto.setTopicCompensationData(compensationData);
 
         Matcher matcher = pattern.matcher(noteDto.getContent() == null ? "" : noteDto.getContent());
         StringBuilder sb = new StringBuilder();
@@ -56,7 +60,6 @@ public class GetTopicHandler extends NoteHandler {
 
         // 3.多个话题先收集，再一次性批量查询已存在话题
         List<Integer> topicIdList = new ArrayList<>();
-        Map<Integer, Integer> compensationData = topicCompensationData.get();
         if (!topicContents.isEmpty()) {
             LambdaQueryWrapper<Topic> queryWrapper = new LambdaQueryWrapper<>();
             queryWrapper.in(Topic::getContent, topicContents);
@@ -104,7 +107,10 @@ public class GetTopicHandler extends NoteHandler {
     @Override
     public void compensate(NoteDto noteDto) {
         // 补偿：恢复话题状态
-        Map<Integer, Integer> compensationData = topicCompensationData.get();
+        Map<Integer, Integer> compensationData = noteDto.getTopicCompensationData();
+        if (compensationData == null || compensationData.isEmpty()) {
+            return;
+        }
         try {
             for (Map.Entry<Integer, Integer> entry : compensationData.entrySet()) {
                 Integer topicId = entry.getKey();

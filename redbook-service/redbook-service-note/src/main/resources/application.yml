@@ -75,13 +75,6 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 0
-    mongodb:
-      host: ${MONGO_HOST:localhost}
-      port: ${MONGO_PORT:27017}
-      database: redbook
-      username: ${MONGO_USERNAME:root}
-      password: ${MONGO_PASSWORD:your_mongo_password}
-      authentication-database: admin
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true

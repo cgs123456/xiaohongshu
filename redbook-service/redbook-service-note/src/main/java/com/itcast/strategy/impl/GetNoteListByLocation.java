@@ -1,6 +1,5 @@
 package com.itcast.strategy.impl;
 
-import com.itcast.client.UserClient;
 import com.itcast.component.UserBatchLoader;
 import com.itcast.constant.RedisConstant;
 import com.itcast.mapper.NoteMapper;
@@ -34,9 +33,6 @@ public class GetNoteListByLocation implements GetNotesStrategy {
 
     @Value("${geo.distance}")
     private String geoDistance;
-
-    @Autowired
-    private UserClient userClient;
 
     @Autowired
     private UserBatchLoader userBatchLoader;
@@ -73,8 +69,12 @@ public class GetNoteListByLocation implements GetNotesStrategy {
             List<Distance> distances = new ArrayList<>();
             for (GeoResult<RedisGeoCommands.GeoLocation<Object>> geoResult : radius) {
                 Object name = geoResult.getContent().getName();
+                // geo member 反序列化可能是 Integer 或 Long，两者都接受
                 if (name instanceof Integer) {
                     noteIds.add((Integer) name);
+                    distances.add(geoResult.getDistance());
+                } else if (name instanceof Long) {
+                    noteIds.add(((Long) name).intValue());
                     distances.add(geoResult.getDistance());
                 }
             }

@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.util.List;
 
 @RestController
@@ -21,7 +20,7 @@ public class UserController {
     private UserService userService;
 
     @GetMapping("/getInfo")
-    public Result<UserVo> getInfo() throws ParseException {
+    public Result<UserVo> getInfo() {
         return userService.getInfo();
     }
 

@@ -13,8 +13,12 @@ import java.util.List;
 @Document(indexName = "rb_note")
 @Mapping(mappingPath = "rb_note-mapping.json")
 public class NoteEs {
+    /**
+     * ES 文档 id。用 String 存储雪花 id：雪花 id 是 Long，
+     * 用 Integer 承接（toIntExact）必然 ArithmeticException，导致 ES 同步永远失败
+     */
     @Id
-    private Integer id;
+    private String id;
     private String title;
     private String content;
     private String image;

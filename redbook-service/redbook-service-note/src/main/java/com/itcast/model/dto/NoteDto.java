@@ -6,12 +6,18 @@ import lombok.EqualsAndHashCode;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class NoteDto extends Note {
     private MultipartFile file;
     private List<Integer> topicList;
+    /**
+     * 话题补偿数据（topicId -> oldHot，null 表示需删除新话题）。
+     * 由 GetTopicHandler 写入、compensate 读取；随请求级 NoteDto 生命周期销毁，无线程残留问题
+     */
+    private Map<Integer, Integer> topicCompensationData;
     /** 内容审核状态：null=未审核/放行，"PENDING_REVIEW"=待人工审核，"BLOCKED"=已拦截 */
     private String moderationStatus;
     /** AI 生成的 50 字摘要（transient，不存数据库，仅同步到 ES 用于搜索增强） */

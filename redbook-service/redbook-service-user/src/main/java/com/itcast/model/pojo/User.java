@@ -75,6 +75,12 @@ public class User implements Serializable {
     private String school;
 
     /**
+     * 个性签名
+     */
+    @TableField("signature")
+    private String signature;
+
+    /**
      * 注册时间
      */
     @TableField("time")

@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,13 +72,60 @@ public class CommentServiceImpl implements CommentService {
                 .distinct()
                 .collect(Collectors.toList());
         Map<Integer, User> userMap = batchGetUsers(userIds);
-        // 3.组装 VO
-        List<CommentVo> voList = new ArrayList<>(comments.size());
+        // 3.先按 parentId 分组：一级评论（parentId="0"）与其余评论（parentId 指向本次结果中的某条评论）
+        Map<String, Comment> byId = new HashMap<>();
+        Map<String, List<Comment>> childrenMap = new HashMap<>();
+        List<Comment> topComments = new ArrayList<>();
         for (Comment comment : comments) {
+            if (comment.getId() != null) {
+                byId.put(comment.getId().toHexString(), comment);
+            }
+            String parentId = comment.getParentId() == null ? DEFAULT_PARENT_ID : comment.getParentId();
+            if (DEFAULT_PARENT_ID.equals(parentId)) {
+                topComments.add(comment);
+            } else {
+                childrenMap.computeIfAbsent(parentId, k -> new ArrayList<>()).add(comment);
+            }
+        }
+        // 4.把挂在"回复"上的回复向上归到一级评论：沿 parentId 上溯到根（一级）评论
+        Map<String, List<Comment>> groupedByRoot = new HashMap<>();
+        for (Map.Entry<String, List<Comment>> entry : childrenMap.entrySet()) {
+            for (Comment child : entry.getValue()) {
+                String rootKey = entry.getKey();
+                String topKey = null;
+                // 最多上溯 comments.size() 次，防止脏数据成环；topKey 记录上溯链上最后一级评论（即根一级评论）
+                int hop = 0;
+                while (!DEFAULT_PARENT_ID.equals(rootKey) && byId.containsKey(rootKey) && hop++ <= comments.size()) {
+                    topKey = rootKey;
+                    rootKey = byId.get(rootKey).getParentId() == null
+                            ? DEFAULT_PARENT_ID : byId.get(rootKey).getParentId();
+                }
+                // 挂到根一级评论下；父链断裂（根不在本次结果中）时挂回原 parentId，避免回复丢失
+                String attachKey = topKey != null ? topKey : entry.getKey();
+                groupedByRoot.computeIfAbsent(attachKey, k -> new ArrayList<>()).add(child);
+            }
+        }
+        // 5.组装两级树：一级评论按时间倒序（查询已排序），子评论按挂载顺序（保持倒序）
+        List<CommentVo> voList = new ArrayList<>(topComments.size());
+        for (Comment top : topComments) {
             CommentVo vo = new CommentVo();
-            vo.setComment(comment);
-            vo.setUser(userMap.get(comment.getUserId()));
-            vo.setDealTime(dealTime(comment.getTime()));
+            vo.setComment(top);
+            vo.setCommentVoId(top.getId() == null ? null : top.getId().toHexString());
+            vo.setUser(userMap.get(top.getUserId()));
+            vo.setDealTime(dealTime(top.getTime()));
+            List<Comment> children = top.getId() == null ? null : groupedByRoot.get(top.getId().toHexString());
+            if (children != null && !children.isEmpty()) {
+                List<CommentVo> childVos = new ArrayList<>(children.size());
+                for (Comment child : children) {
+                    CommentVo childVo = new CommentVo();
+                    childVo.setComment(child);
+                    childVo.setCommentVoId(child.getId() == null ? null : child.getId().toHexString());
+                    childVo.setUser(userMap.get(child.getUserId()));
+                    childVo.setDealTime(dealTime(child.getTime()));
+                    childVos.add(childVo);
+                }
+                vo.setChildrenList(childVos);
+            }
             voList.add(vo);
         }
         return Result.success(voList);
@@ -107,7 +155,7 @@ public class CommentServiceImpl implements CommentService {
         } catch (Exception e) {
             log.error("批量获取评论用户信息失败，降级为逐个查询", e);
         }
-        Map<Integer, User> userMap = new java.util.HashMap<>();
+        Map<Integer, User> userMap = new HashMap<>();
         for (Integer uid : userIds) {
             try {
                 Result<User> result = userClient.getUserById(uid);

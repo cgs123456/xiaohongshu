@@ -1,6 +1,5 @@
 package com.itcast.strategy.impl;
 
-import com.itcast.client.UserClient;
 import com.itcast.component.UserBatchLoader;
 import com.itcast.context.UserContext;
 import com.itcast.mapper.NoteScanMapper;
@@ -27,9 +26,6 @@ public class GetNoteListByScan implements GetNotesStrategy {
 
     @Autowired
     private NoteScanMapper noteScanMapper;
-
-    @Autowired
-    private UserClient userClient;
 
     @Autowired
     private UserBatchLoader userBatchLoader;

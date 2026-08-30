@@ -9,6 +9,11 @@ import com.itcast.result.Result;
 import java.util.List;
 
 public interface ProductService {
+
+    /**
+     * 推荐商品：库存>0，按 id 倒序取前 limit 个
+     */
+    Result<List<Product>> recommend(int limit);
     Result<List<Product>> getProductList();
 
     /**

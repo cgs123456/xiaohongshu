@@ -1,7 +1,6 @@
 package com.itcast.strategy.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.itcast.client.UserClient;
 import com.itcast.component.UserBatchLoader;
 import com.itcast.constant.RedisConstant;
 import com.itcast.context.UserContext;
@@ -32,9 +31,6 @@ public class GetNoteList implements GetNotesStrategy {
     private NoteMapper noteMapper;
 
     @Autowired
-    private UserClient userClient;
-
-    @Autowired
     private UserBatchLoader userBatchLoader;
 
     @Autowired
@@ -59,11 +55,14 @@ public class GetNoteList implements GetNotesStrategy {
         if (noteList.isEmpty()) {
             return Result.success(new ArrayList<>());
         }
-        // 4.布隆过滤器过滤
+        // 4.布隆过滤器过滤（未登录 userId 为 null 时跳过，避免 key 变成 "...null" 且全量过滤为空）
         Integer userId = UserContext.getUserId();
-        List<Note> filteredList = noteList.stream()
-                .filter(note -> !bloomFilterUtil.mightContain(RedisConstant.USER_BLOOM_FILTER + userId, note.getId().toString()))
-                .collect(Collectors.toList());
+        List<Note> filteredList = noteList;
+        if (userId != null) {
+            filteredList = noteList.stream()
+                    .filter(note -> !bloomFilterUtil.mightContain(RedisConstant.USER_BLOOM_FILTER + userId, note.getId().toString()))
+                    .collect(Collectors.toList());
+        }
         if (filteredList.isEmpty()) {
             return Result.success(new ArrayList<>());
         }

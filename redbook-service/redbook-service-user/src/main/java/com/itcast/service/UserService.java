@@ -7,11 +7,10 @@ import com.itcast.model.pojo.User;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.util.List;
 
 public interface UserService {
-    Result<UserVo> getInfo() throws ParseException;
+    Result<UserVo> getInfo();
 
     Result<User> getUserById(Integer userId);
 

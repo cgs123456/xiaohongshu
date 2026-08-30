@@ -16,7 +16,7 @@ import com.itcast.util.NumberUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -48,7 +48,7 @@ public class LoginServiceImpl implements LoginService {
     private static final int MAX_VERIFY_FAIL_COUNT = 5;
 
     @Autowired
-    private RedisTemplate<String, String> redisTemplate;
+    private StringRedisTemplate redisTemplate;
 
     @Autowired
     private UserMapper userMapper;
@@ -66,14 +66,20 @@ public class LoginServiceImpl implements LoginService {
         String intervalKey = RedisConstant.PHONE_CODE.concat("interval:").concat(phone);
         String dailyKey = RedisConstant.PHONE_CODE.concat("daily:").concat(phone).concat(":").concat(LocalDate.now().toString());
 
-        // 1.发送间隔限制：同一手机号 60 秒内只能发一次
+        // 1.先查当日计数，已达上限直接拒绝（不消耗 60s 发送间隔）
+        String dailyCountStr = redisTemplate.opsForValue().get(dailyKey);
+        if (dailyCountStr != null && Long.parseLong(dailyCountStr) >= DAILY_SEND_LIMIT) {
+            return Result.failure("今日发送次数已达上限");
+        }
+
+        // 2.发送间隔限制：同一手机号 60 秒内只能发一次
         Boolean first = redisTemplate.opsForValue().setIfAbsent(
                 intervalKey, "1", SEND_INTERVAL_SECONDS, TimeUnit.SECONDS);
         if (!Boolean.TRUE.equals(first)) {
             return Result.failure("发送过于频繁，请稍后再试");
         }
 
-        // 2.每日限 10 次（INCR + 当天过期）
+        // 3.每日限 10 次（INCR + 当天过期，仅通过间隔检查后计数）
         Long dailyCount = redisTemplate.opsForValue().increment(dailyKey);
         if (dailyCount != null && dailyCount == 1L) {
             redisTemplate.expire(dailyKey, 1, TimeUnit.DAYS);
@@ -82,13 +88,13 @@ public class LoginServiceImpl implements LoginService {
             return Result.failure("今日发送次数已达上限");
         }
 
-        // 3.生成 6 位验证码并保存到 redis（短信通道未接入，开发联调时从日志取码）
+        // 4.生成 6 位验证码并保存到 redis（短信通道未接入，开发联调时从日志取码）
         String code = CodeUtil.generateCode(6);
         redisTemplate.opsForValue().set(codeKey, code, CODE_TTL_SECONDS, TimeUnit.SECONDS);
         log.info("验证码已生成 phone={} code={}（仅供联调，生产环境必须接入短信通道后移除该日志）",
                 phone.length() == 11 ? phone.substring(0, 3) + "****" + phone.substring(7) : phone, code);
 
-        // 4.返回结果（验证码不再回显给前端）
+        // 5.返回结果（验证码不再回显给前端）
         return Result.success("验证码已发送");
     }
 
@@ -106,9 +112,12 @@ public class LoginServiceImpl implements LoginService {
 
         // 2.原子获取并删除验证码（getAndDelete），防止并发重复使用
         String cacheCode = redisTemplate.opsForValue().getAndDelete(codeKey);
-        boolean codeOk = cacheCode != null && loginDto.getCode() != null && cacheCode.equals(loginDto.getCode());
-        if (!codeOk) {
-            // 3.失败计数（INCR + EXPIRE），达到上限后锁定
+        // 3.验证码不存在（已过期或未发送）：不计失败计数，避免正常用户被误锁
+        if (cacheCode == null) {
+            throw new CodeErrorException("验证码已过期，请重新获取");
+        }
+        // 4.码存在但比对失败：失败计数（INCR + EXPIRE），达到上限后锁定
+        if (loginDto.getCode() == null || !cacheCode.equals(loginDto.getCode())) {
             Long fails = redisTemplate.opsForValue().increment(failCountKey);
             if (fails != null && fails == 1L) {
                 redisTemplate.expire(failCountKey, VERIFY_LOCK_MINUTES, TimeUnit.MINUTES);
@@ -116,22 +125,22 @@ public class LoginServiceImpl implements LoginService {
             throw new CodeErrorException(ExceptionConstant.CODE_ERROR);
         }
 
-        // 4.校验成功，清空失败计数
+        // 5.校验成功，清空失败计数
         redisTemplate.delete(failCountKey);
 
-        // 5.获取用户id
+        // 6.获取用户id
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(User::getPhone, loginDto.getPhone());
         User dbUser = userMapper.selectOne(queryWrapper);
         Integer userId;
-        // 6.判断用户是否存在
+        // 7.判断用户是否存在
         if (dbUser == null) {
-            // 6.1 注册
+            // 7.1 注册
             User user = new User();
             user.setPhone(loginDto.getPhone());
             user.setNickname("普通用户");
             user.setImage("https://redbook512.oss-cn-beijing.aliyuncs.com/default.png");
-            // 6.2 生成小红书号
+            // 7.2 生成小红书号
             Long number = NumberUtil.getNumber();
             user.setNumber(number);
             userMapper.insert(user);
@@ -139,13 +148,13 @@ public class LoginServiceImpl implements LoginService {
         } else {
             userId = dbUser.getId();
         }
-        // 7.生成token
+        // 8.生成token
         String token = JwtUtil.createToken(userId);
 
         // 向mq中发送消息
         rabbitTemplate.convertAndSend(MqConstant.MESSAGE_NOTICE_EXCHANGE, MqConstant.LOGIN_KEY, userId);
 
-        // 8.返回token
+        // 9.返回token
         return Result.success(token);
     }
 }

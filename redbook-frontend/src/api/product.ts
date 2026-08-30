@@ -55,11 +55,11 @@ export interface BuyDto {
     couponId?: number
 }
 
-// 获取商品列表
-export const getProductList = (page?: number, size?: number) => {
+// 获取商品列表（后端 ProductController.getProductList 期望 page / pageSize 两个 @RequestParam）
+export const getProductList = (page?: number, pageSize?: number) => {
     const params: Record<string, number> = {}
     if (page !== undefined) params.page = page
-    if (size !== undefined) params.size = size
+    if (pageSize !== undefined) params.pageSize = pageSize
     return request.get<void, ApiResponse<Product[]>>('/product/getProductList', { params })
 }
 

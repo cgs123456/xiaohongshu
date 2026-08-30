@@ -133,6 +133,10 @@ const activeCategory = ref('推荐')
 const hasMore = ref(true)
 
 const columns = ref<Note[][]>([[], [], [], []])
+// 各列近似累计高度，用于增量分配新卡片
+const columnHeights = ref<number[]>([0, 0, 0, 0])
+// 已分配到列的笔记 id 集合，防止重复分配
+const laidOutIds = new Set<string>()
 
 // 分类列表
 const categories = ['推荐', '穿搭', '美妆', '影视', '职场', '美食', '旅行', '家居', '游戏', '汽车', '运动', '摄影']
@@ -211,13 +215,14 @@ const loadNotes = async () => {
     const response = await getNoteList(page, pageSize.value)
     const newNotes = (response.data || []).map((note, index) => convertNoteData(note, index))
 
-    // 第一页时清空列表，后续页追加
+    // 第一页时清空列表并全量重排，后续页只增量追加
     if (page === 1) {
       notes.value = newNotes
+      layoutWaterfall()
     } else {
       notes.value = [...notes.value, ...newNotes]
+      appendToWaterfall(newNotes)
     }
-    layoutWaterfall()
 
     // 后端返回空数组或不足一页时停止加载
     if (newNotes.length === 0 || newNotes.length < pageSize.value) {
@@ -306,17 +311,23 @@ const handleLoginSuccess = () => {
   loadNotes()
 }
 
-// 瀑布流布局算法
-const layoutWaterfall = () => {
-  const columnHeights = [0, 0, 0, 0]
-  columns.value = [[], [], [], []]
-
-  notes.value.forEach(note => {
-    const minHeight = Math.min(...columnHeights)
-    const minIndex = columnHeights.indexOf(minHeight)
+// 增量分配：新笔记只追加到当前最短的列，不重排已有卡片
+const appendToWaterfall = (newNotes: Note[]) => {
+  newNotes.forEach(note => {
+    if (laidOutIds.has(note.id)) return
+    const minIndex = columnHeights.value.indexOf(Math.min(...columnHeights.value))
     columns.value[minIndex].push(note)
-    columnHeights[minIndex] += note.height + 20
+    columnHeights.value[minIndex] += note.height + 20
+    laidOutIds.add(note.id)
   })
+}
+
+// 全量重排（仅刷新场景：首屏加载、切换分类、重新加载、发布后刷新）
+const layoutWaterfall = () => {
+  columns.value = [[], [], [], []]
+  columnHeights.value = [0, 0, 0, 0]
+  laidOutIds.clear()
+  appendToWaterfall(notes.value)
 }
 
 onMounted(() => {

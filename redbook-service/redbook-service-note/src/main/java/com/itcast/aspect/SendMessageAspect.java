@@ -16,6 +16,8 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Method;
 import java.util.Date;
@@ -68,9 +70,27 @@ public class SendMessageAspect {
 
         try {
             log.info("【用户行为日志】用户[id={}]对笔记[id={}]执行了{}操作", userId, noteId, type);
-            kafkaTemplate.send(KafkaConfig.USER_BEHAVIOR_LOG_TOPIC, objectMapper.writeValueAsString(behaviorMessage));
-        } catch (JsonProcessingException e) {
-            log.error("序列化用户行为日志失败 noteId:{} userId:{}", noteId, userId, e);
+            // 若方法处于事务中（如 like 带 @Transactional），延后到事务提交后再发 Kafka，
+            // 避免事务回滚后仍产生脏行为日志；无事务时直接发送
+            Runnable sendTask = () -> {
+                try {
+                    kafkaTemplate.send(KafkaConfig.USER_BEHAVIOR_LOG_TOPIC, objectMapper.writeValueAsString(behaviorMessage));
+                } catch (JsonProcessingException e) {
+                    log.error("序列化用户行为日志失败 noteId:{} userId:{}", noteId, userId, e);
+                }
+            };
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        sendTask.run();
+                    }
+                });
+            } else {
+                sendTask.run();
+            }
+        } catch (Exception e) {
+            log.error("发送用户行为日志失败 noteId:{} userId:{}", noteId, userId, e);
         }
     }
 }

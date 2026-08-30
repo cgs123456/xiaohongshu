@@ -225,18 +225,115 @@ const formatTimeFromTimestamp = (timestamp?: number): string => {
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
+// ---------- WebSocket 消息类型守卫 ----------
+// 替代原来的 as Record<string, any> 双重断言：先通过守卫确认结构，再安全访问字段
+type Rec = Record<string, unknown>
+const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null
+
+// 后端格式一：{ type: 0|1|2, noticeId, obj: { like|collection|attention, note, user } }
+interface ObjLikeInfo {
+  id?: number | string
+  createTime?: string
+}
+interface ObjNoteInfo {
+  title?: string
+  content?: string
+  image?: string
+}
+interface ObjUserInfo {
+  image?: string
+  nickname?: string
+  phone?: string
+}
+interface ObjMessage {
+  type: number
+  noticeId: number | string
+  obj: {
+    like?: ObjLikeInfo
+    collection?: ObjLikeInfo
+    attention?: ObjLikeInfo
+    note?: ObjNoteInfo
+    user?: ObjUserInfo
+  }
+}
+const isObjMessage = (v: unknown): v is ObjMessage =>
+  isRec(v) &&
+  typeof v.type === 'number' &&
+  v.noticeId !== undefined && v.noticeId !== null &&
+  isRec(v.obj)
+
+// 类型谓词：守卫通过后，对应字段一定存在（收窄掉可选性）
+type LikeMsg = ObjMessage & { obj: { like: ObjLikeInfo; note: ObjNoteInfo; user: ObjUserInfo } }
+const isLikeMsg = (m: ObjMessage): m is LikeMsg =>
+  m.type === 0 && m.obj.like !== undefined && m.obj.note !== undefined && m.obj.user !== undefined
+
+type CollectMsg = ObjMessage & { obj: { collection: ObjLikeInfo; note: ObjNoteInfo; user: ObjUserInfo } }
+const isCollectMsg = (m: ObjMessage): m is CollectMsg =>
+  m.type === 1 && m.obj.collection !== undefined && m.obj.note !== undefined && m.obj.user !== undefined
+
+type AttentionMsg = ObjMessage & { obj: { attention: ObjLikeInfo; user: ObjUserInfo } }
+const isAttentionMsg = (m: ObjMessage): m is AttentionMsg =>
+  m.type === 2 && m.obj.attention !== undefined && m.obj.user !== undefined
+
+// 后端格式二：NotificationMessageDTO { type: 'like'|'collect'|'follow'|'comment', actionUserId, noticeUserId, ... }
+interface DtoMessage {
+  type: string
+  actionUserId: number | string
+  noticeUserId: number | string
+  actionUserAvatar?: string
+  actionUserNickname?: string
+  timestamp?: number
+  noteTitle?: string
+  noteContent?: string
+  noteImage?: string
+  commentContent?: string
+}
+const isDtoMessage = (v: unknown): v is DtoMessage =>
+  isRec(v) &&
+  typeof v.type === 'string' &&
+  v.actionUserId !== undefined && v.actionUserId !== null &&
+  v.noticeUserId !== undefined && v.noticeUserId !== null
+
+// 兼容旧格式：{ type: 'notification'|'comment'|'like'|'follow'|'collect', ... }
+const LEGACY_TYPES = ['notification', 'comment', 'like', 'follow', 'collect']
+interface LegacyMessage {
+  type: string
+  id?: string | number
+  content?: string
+  message?: string
+  avatar?: string
+  userAvatar?: string
+  userImage?: string
+  username?: string
+  userName?: string
+  nickname?: string
+  timestamp?: number
+  time?: number
+  noteTitle?: string
+  title?: string
+  noteContent?: string
+  noteImage?: string
+  image?: string
+  noteImages?: string
+}
+const isLegacyMessage = (v: unknown): v is LegacyMessage =>
+  isRec(v) && typeof v.type === 'string' && LEGACY_TYPES.includes(v.type)
+
 // 处理接收到的 WebSocket 消息
 const handleWebSocketMessage = (data: unknown) => {
   try {
-    // 简单类型守卫，替代 as Record<string, any> 双重断言
-    const isRecord = (v: unknown): v is Record<string, any> =>
-      typeof v === 'object' && v !== null
-    if (!isRecord(data)) return
-    const msgData = data
+    const pushNotification = (n: Notification) => {
+      notifications.value.unshift(n)
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('新消息', {
+          body: `${n.username}: ${n.content}`,
+          icon: n.avatar
+        })
+      }
+    }
 
     // 后端格式：{ type: 0, noticeId: 3, obj: { like, note, user } }
-    if (msgData.type !== undefined && msgData.noticeId && msgData.obj) {
-      const obj = isRecord(msgData.obj) ? msgData.obj : {}
+    if (isObjMessage(data)) {
       let notificationType = ''
       let content = ''
       let avatar = ''
@@ -245,128 +342,97 @@ const handleWebSocketMessage = (data: unknown) => {
       let noteImage = ''
       let notificationId = String(Date.now())
       let createTime: string | undefined
-      
-      // type: 0 表示点赞
-      if (msgData.type === 0 && obj.like && obj.note && obj.user) {
+
+      if (isLikeMsg(data)) {
+        const { like, note, user } = data.obj
         notificationType = 'like'
         content = '赞了你的笔记'
-        avatar = obj.user.image || 'https://i.pravatar.cc/150?img=10'
-        username = obj.user.nickname || obj.user.phone || '未知用户'
-        noteTitle = obj.note.title || obj.note.content?.substring(0, 20) || '无标题'
-        noteImage = withThumb(obj.note.image?.split(',')[0], 200)
-        notificationId = String(obj.like.id)
-        createTime = obj.like.createTime
-      }
-      // type: 1 表示收藏
-      else if (msgData.type === 1 && obj.collection && obj.note && obj.user) {
+        avatar = user.image || 'https://i.pravatar.cc/150?img=10'
+        username = user.nickname || user.phone || '未知用户'
+        noteTitle = note.title || note.content?.substring(0, 20) || '无标题'
+        noteImage = withThumb(note.image?.split(',')[0], 200)
+        notificationId = String(like.id)
+        createTime = like.createTime
+      } else if (isCollectMsg(data)) {
+        const { collection, note, user } = data.obj
         notificationType = 'collect'
         content = '收藏了你的笔记'
-        avatar = obj.user.image || 'https://i.pravatar.cc/150?img=10'
-        username = obj.user.nickname || obj.user.phone || '未知用户'
-        noteTitle = obj.note.title || obj.note.content?.substring(0, 20) || '无标题'
-        noteImage = withThumb(obj.note.image?.split(',')[0], 200)
-        notificationId = String(obj.collection.id)
-        createTime = obj.collection.createTime
-      }
-      // type: 2 表示关注
-      else if (msgData.type === 2 && obj.attention && obj.user) {
+        avatar = user.image || 'https://i.pravatar.cc/150?img=10'
+        username = user.nickname || user.phone || '未知用户'
+        noteTitle = note.title || note.content?.substring(0, 20) || '无标题'
+        noteImage = withThumb(note.image?.split(',')[0], 200)
+        notificationId = String(collection.id)
+        createTime = collection.createTime
+      } else if (isAttentionMsg(data)) {
+        const { attention, user } = data.obj
         notificationType = 'follow'
         content = '关注了你'
-        avatar = obj.user.image || 'https://i.pravatar.cc/150?img=10'
-        username = obj.user.nickname || obj.user.phone || '未知用户'
-        notificationId = String(obj.attention.id)
-        createTime = obj.attention.createTime
+        avatar = user.image || 'https://i.pravatar.cc/150?img=10'
+        username = user.nickname || user.phone || '未知用户'
+        notificationId = String(attention.id)
+        createTime = attention.createTime
       }
-      
+
       if (notificationType) {
-        const newNotification: Notification = {
+        pushNotification({
           id: notificationId,
           type: notificationType,
-          avatar: avatar,
-          username: username,
+          avatar,
+          username,
           time: formatTime(createTime),
-          content: content,
-          noteTitle: noteTitle,
-          noteImage: noteImage
-        }
-        
-        // 添加到通知列表最前方
-        notifications.value.unshift(newNotification)
-        
-        // 可选：显示浏览器通知
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('新消息', {
-            body: `${newNotification.username}: ${newNotification.content}`,
-            icon: newNotification.avatar
-          })
-        }
+          content,
+          noteTitle,
+          noteImage
+        })
       }
     }
     // 新格式：NotificationMessageDTO
-    else if (msgData.type && msgData.actionUserId && msgData.noticeUserId) {
+    else if (isDtoMessage(data)) {
       let content = ''
-      if (msgData.type === 'like') {
+      if (data.type === 'like') {
         content = '赞了你的笔记'
-      } else if (msgData.type === 'collect') {
+      } else if (data.type === 'collect') {
         content = '收藏了你的笔记'
-      } else if (msgData.type === 'follow') {
+      } else if (data.type === 'follow') {
         content = '关注了你'
-      } else if (msgData.type === 'comment') {
-        content = msgData.commentContent || '评论了你的笔记'
+      } else if (data.type === 'comment') {
+        content = data.commentContent || '评论了你的笔记'
       }
-      
-      const newNotification: Notification = {
-        id: String(msgData.timestamp || Date.now()),
-        type: msgData.type,
-        avatar: msgData.actionUserAvatar || 'https://i.pravatar.cc/150?img=10',
-        username: msgData.actionUserNickname || '未知用户',
-        time: formatTimeFromTimestamp(msgData.timestamp || Date.now()),
-        content: content,
-        noteTitle: msgData.noteTitle || msgData.noteContent || '无标题',
-        noteImage: msgData.noteImage || ''
-      }
-      
-      notifications.value.unshift(newNotification)
-      
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('新消息', {
-          body: `${newNotification.username}: ${newNotification.content}`,
-          icon: newNotification.avatar
-        })
-      }
+
+      pushNotification({
+        id: String(data.timestamp || Date.now()),
+        type: data.type,
+        avatar: data.actionUserAvatar || 'https://i.pravatar.cc/150?img=10',
+        username: data.actionUserNickname || '未知用户',
+        time: formatTimeFromTimestamp(data.timestamp || Date.now()),
+        content,
+        noteTitle: data.noteTitle || data.noteContent || '无标题',
+        noteImage: data.noteImage || ''
+      })
     }
     // 兼容旧格式
-    else if (msgData.type === 'notification' || msgData.type === 'comment' || msgData.type === 'like' || msgData.type === 'follow' || msgData.type === 'collect') {
-      let content = msgData.content || msgData.message || ''
-      if (msgData.type === 'like') {
+    else if (isLegacyMessage(data)) {
+      let content = data.content || data.message || ''
+      if (data.type === 'like') {
         content = '赞了你的笔记'
-      } else if (msgData.type === 'collect') {
+      } else if (data.type === 'collect') {
         content = '收藏了你的笔记'
-      } else if (msgData.type === 'follow') {
+      } else if (data.type === 'follow') {
         content = '关注了你'
-      } else if (msgData.type === 'comment') {
-        content = msgData.content || msgData.message || '评论了你的笔记'
+      } else if (data.type === 'comment') {
+        content = data.content || data.message || '评论了你的笔记'
       }
-      
-      const newNotification: Notification = {
-        id: msgData.id || String(Date.now()),
-        type: msgData.type || 'comment',
-        avatar: msgData.avatar || msgData.userAvatar || msgData.userImage || 'https://i.pravatar.cc/150?img=10',
-        username: msgData.username || msgData.userName || msgData.nickname || '未知用户',
-        time: formatTimeFromTimestamp(msgData.timestamp || msgData.time || Date.now()),
-        content: content,
-        noteTitle: msgData.noteTitle || msgData.title || msgData.noteContent,
-        noteImage: msgData.noteImage || msgData.image || (msgData.noteImages ? msgData.noteImages.split(',')[0] : '')
-      }
-      
-      notifications.value.unshift(newNotification)
-      
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('新消息', {
-          body: `${newNotification.username}: ${newNotification.content}`,
-          icon: newNotification.avatar
-        })
-      }
+
+      pushNotification({
+        id: data.id !== undefined ? String(data.id) : String(Date.now()),
+        type: data.type,
+        avatar: data.avatar || data.userAvatar || data.userImage || 'https://i.pravatar.cc/150?img=10',
+        username: data.username || data.userName || data.nickname || '未知用户',
+        time: formatTimeFromTimestamp(data.timestamp || data.time || Date.now()),
+        content,
+        noteTitle: data.noteTitle || data.title || data.noteContent,
+        noteImage: data.noteImage || data.image || (data.noteImages ? data.noteImages.split(',')[0] : '')
+      })
     }
   } catch (error) {
     // 处理 WebSocket 消息失败

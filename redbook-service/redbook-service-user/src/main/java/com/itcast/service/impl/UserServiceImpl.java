@@ -111,6 +111,7 @@ public class UserServiceImpl implements UserService {
         if (dto.getAddress() != null) updateWrapper.set(User::getAddress, dto.getAddress());
         if (dto.getSchool() != null) updateWrapper.set(User::getSchool, dto.getSchool());
         if (dto.getIdentity() != null) updateWrapper.set(User::getIdentity, dto.getIdentity());
+        if (dto.getSignature() != null) updateWrapper.set(User::getSignature, dto.getSignature());
         userMapper.update(null, updateWrapper);
         return Result.success(null);
     }

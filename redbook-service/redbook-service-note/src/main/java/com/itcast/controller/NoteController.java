@@ -23,11 +23,11 @@ public class NoteController {
 
     @GetMapping("/getNoteList")
     public Result<List<NoteVo>> getNoteList(
-            @RequestParam("page") Integer page, @RequestParam("pageSize") Integer pageSize) {
-        // 分页参数校验
-        if (page == null || page < 1) page = 1;
-        if (pageSize == null || pageSize < 1) pageSize = 20;
-        if (pageSize > 100) pageSize = 100;
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        // 分页参数校验（可选参数，缺省 1/20）
+        page = defaultPage(page);
+        pageSize = defaultPageSize(pageSize);
         
         NoteStrategyContext context = NoteStrategyContext.builder()
                 .page(page)
