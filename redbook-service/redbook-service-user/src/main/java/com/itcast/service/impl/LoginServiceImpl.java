@@ -139,7 +139,9 @@ public class LoginServiceImpl implements LoginService {
             User user = new User();
             user.setPhone(loginDto.getPhone());
             user.setNickname("普通用户");
-            user.setImage("https://redbook512.oss-cn-beijing.aliyuncs.com/default.png");
+            // 默认头像用前端静态资源（/public/default-avatar.png），
+            // 不再依赖原项目遗留的外部 OSS 桶（redbook512）
+            user.setImage("/default-avatar.png");
             // 7.2 生成小红书号
             Long number = NumberUtil.getNumber();
             user.setNumber(number);
