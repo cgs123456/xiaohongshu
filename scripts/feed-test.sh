@@ -31,8 +31,13 @@ T1=$(login "$PHONE1")
 if [ -z "$T1" ] || [ "$T1" = "None" ]; then echo "LOGIN user1 FAILED"; exit 1; fi
 echo "both logins ok"
 
-echo "== user3 follows user1 =="
-curl -s -m 8 -X POST $GW/user/attention/1 -H "token: $T3"; echo
+echo "== user3 follows user1 (idempotent: attention is a toggle, only follow when not yet) =="
+IS_ATT=$(curl -s -m 8 "$GW/user/isAttention/1" -H "token: $T3" | python -c "import json,sys; print(json.load(sys.stdin)['data'])" 2>/dev/null)
+if [ "$IS_ATT" = "1" ]; then
+  echo "already following"
+else
+  curl -s -m 8 -X POST $GW/user/attention/1 -H "token: $T3"; echo
+fi
 
 echo "== user1 posts note =="
 printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0aIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB\x60\x82' > .run/feed.png

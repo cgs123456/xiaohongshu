@@ -41,28 +41,28 @@ public class ProductConsumer {
         if (messageId == null || messageId.isBlank()) {
             // 无 messageId 无法计数重试，视为毒消息直接死信（消息保留在死信队列）
             log.error("库存消息缺少 messageId，转入死信，payload={}", buyDto);
-            safeNack(channel, deliveryTag, false);
+            com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, false, "库存消息");
             return;
         }
 
         try {
             apply(buyDto);
-            safeAck(channel, deliveryTag);
+            com.itcast.mq.MqConsumerSupport.safeAck(channel, deliveryTag, "库存消息");
         } catch (IllegalArgumentException e) {
             log.error("库存消息参数非法，转入死信，messageId={}", messageId, e);
             redisTemplate.delete(RETRY_KEY + messageId);
-            safeNack(channel, deliveryTag, false);
+            com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, false, "库存消息");
         } catch (Exception e) {
-            long retryCount = nextRetryCount(messageId);
+            long retryCount = com.itcast.mq.MqConsumerSupport.nextRetryCount(redisTemplate, RETRY_KEY, messageId);
             if (retryCount > MAX_RETRY_COUNT) {
                 log.error("CRITICAL: 库存消息重试超限进死信（MySQL 库存与 Redis 疑似漂移，需人工核对重放），messageId={} payload={}",
                         messageId, buyDto, e);
                 redisTemplate.delete(RETRY_KEY + messageId);
-                safeNack(channel, deliveryTag, false);
+                com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, false, "库存消息");
             } else {
                 log.error("库存消息处理异常，退避重试，messageId={} 第 {} 次", messageId, retryCount, e);
-                sleepBackoff(retryCount);
-                safeNack(channel, deliveryTag, true);
+                com.itcast.mq.MqConsumerSupport.sleepBackoff(retryCount);
+                com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, true, "库存消息");
             }
         }
     }
@@ -73,7 +73,7 @@ public class ProductConsumer {
                              @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) {
         String body = message.getBody() == null ? "" : new String(message.getBody(), java.nio.charset.StandardCharsets.UTF_8);
         log.error("CRITICAL: 库存死信需人工核对重放，payload={}", body);
-        safeAck(channel, deliveryTag);
+        com.itcast.mq.MqConsumerSupport.safeAck(channel, deliveryTag, "库存消息");
     }
 
     private void apply(BuyDto buyDto) {
@@ -96,42 +96,7 @@ public class ProductConsumer {
         stockSyncService.deduct(buyDto);
     }
 
-    private long nextRetryCount(String messageId) {
-        try {
-            String key = RETRY_KEY + messageId;
-            Long count = redisTemplate.opsForValue().increment(key);
-            if (count != null && count == 1) {
-                redisTemplate.expire(key, 24, TimeUnit.HOURS);
-            }
-            return count == null ? 1 : count;
-        } catch (Exception ex) {
-            log.error("记录库存消息重试次数失败，messageId={}", messageId, ex);
-            return 1;
-        }
-    }
 
-    /** 指数退避：1s/2s/4s */
-    private void sleepBackoff(long retryCount) {
-        try {
-            Thread.sleep(Math.min(1000L * (1L << (retryCount - 1)), 8000));
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
-    }
 
-    private void safeAck(Channel channel, long deliveryTag) {
-        try {
-            channel.basicAck(deliveryTag, false);
-        } catch (Exception ex) {
-            log.error("确认库存消息异常", ex);
-        }
-    }
 
-    private void safeNack(Channel channel, long deliveryTag, boolean requeue) {
-        try {
-            channel.basicNack(deliveryTag, false, requeue);
-        } catch (Exception ex) {
-            log.error("拒绝库存消息异常", ex);
-        }
-    }
 }

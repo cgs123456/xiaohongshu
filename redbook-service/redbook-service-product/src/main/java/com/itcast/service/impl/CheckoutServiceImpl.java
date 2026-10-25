@@ -87,7 +87,11 @@ public class CheckoutServiceImpl implements CheckoutService {
             return Result.failure("购物车为空");
         }
 
-        // 2.逐项扣 Redis 库存并构建快照明细；任一失败回补全部已扣项
+        // 2.逐项扣 Redis 库存并构建快照明细；任一失败回补全部已扣项。
+        // 商品信息一次批量查（此前逐项 selectById，N 项 N 次往返）
+        java.util.Map<Integer, Product> productMap = productService.selectBatchIds(
+                carts.stream().map(Cart::getProductId).filter(java.util.Objects::nonNull).distinct()
+                        .collect(java.util.stream.Collectors.toList()));
         List<CheckoutOrderDto.CheckoutItem> items = new ArrayList<>();
         List<int[]> deducted = new ArrayList<>(); // {skuId, quantity} 已扣成功的，用于回补
         BigDecimal total = BigDecimal.ZERO;
@@ -98,7 +102,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                         .collect(java.util.stream.Collectors.joining("; "));
         for (Cart cart : carts) {
             int quantity = cart.getQuantity() == null || cart.getQuantity() < 1 ? 1 : cart.getQuantity();
-            Product product = productService.selectById(cart.getProductId());
+            Product product = productMap.get(cart.getProductId());
             if (product == null) {
                 rollbackRedisStock(deducted);
                 return Result.failure("商品不存在或已下架：" + cart.getProductName());

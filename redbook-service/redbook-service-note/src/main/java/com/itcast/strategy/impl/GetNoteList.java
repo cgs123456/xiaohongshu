@@ -64,12 +64,17 @@ public class GetNoteList implements GetNotesStrategy {
         if (noteList.isEmpty()) {
             return Result.success(new ArrayList<>());
         }
-        // 4.布隆过滤器过滤（未登录 userId 为 null 时跳过，避免 key 变成 "...null" 且全量过滤为空）
+        // 4.布隆过滤器过滤（未登录 userId 为 null 时跳过，避免 key 变成 "...null" 且全量过滤为空）；
+        // 整页一次批量判定（此前逐条 EVAL，20 条/页 = 20 次往返）
         Integer userId = UserContext.getUserId();
         List<Note> filteredList = noteList;
         if (userId != null) {
+            java.util.List<String> ids = noteList.stream()
+                    .map(n -> String.valueOf(n.getId())).collect(Collectors.toList());
+            java.util.Set<String> seen = bloomFilterUtil.mightContainBatch(
+                    RedisConstant.USER_BLOOM_FILTER + userId, ids);
             filteredList = noteList.stream()
-                    .filter(note -> !bloomFilterUtil.mightContain(RedisConstant.USER_BLOOM_FILTER + userId, note.getId().toString()))
+                    .filter(note -> !seen.contains(String.valueOf(note.getId())))
                     .collect(Collectors.toList());
         }
         if (filteredList.isEmpty()) {

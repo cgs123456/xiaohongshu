@@ -72,6 +72,9 @@ public interface ProductService {
     /** 按 id 查 SKU（结算链路从购物车行解析规格） */
     com.itcast.model.pojo.Sku getSkuById(Integer skuId);
 
+    /** 批量查商品（结算链路消除 N+1），返回 id -> Product */
+    java.util.Map<Integer, com.itcast.model.pojo.Product> selectBatchIds(java.util.List<Integer> ids);
+
     /**
      * 商品的全部 SKU（详情页规格选择用）
      */

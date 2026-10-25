@@ -58,22 +58,27 @@ public class GetNoteListByAttention implements GetNotesStrategy {
     @Override
     public Result<List<NoteVo>> getNotes(NoteStrategyContext context) {
         Integer userId = UserContext.getUserId();
-        // 1.当前关注集合（读侧过滤已取关作者）
+        // 1.当前关注集合（读侧过滤已取关作者）。
+        // getAttention 上限 500 条：刚好触顶说明关注关系可能被截断，跳过过滤——
+        // 宁可漏进几条已取关作者的笔记，也不能把第 501 位之后的关注者内容全过滤掉
         List<Attention> attentions = userClient.getAttention(userId).getData();
         if (attentions == null || attentions.isEmpty()) {
             return Result.success(new ArrayList<>());
         }
-        Set<Integer> followingIds = attentions.stream().map(Attention::getOtherId)
-                .filter(Objects::nonNull).collect(Collectors.toSet());
-        if (followingIds.isEmpty()) {
+        boolean followingCapped = attentions.size() >= 500;
+        Set<Integer> followingIds = followingCapped
+                ? java.util.Collections.emptySet()
+                : attentions.stream().map(Attention::getOtherId)
+                        .filter(Objects::nonNull).collect(Collectors.toSet());
+        if (followingIds.isEmpty() && !followingCapped) {
             return Result.success(new ArrayList<>());
         }
 
         int page = page(context);
         int pageSize = pageSize(context);
 
-        // 2.收件箱优先读取
-        List<Note> noteList = readFromInbox(userId, followingIds, page, pageSize);
+        // 2.收件箱优先读取（capped 时 followingIds 为 null = 跳过取关过滤）
+        List<Note> noteList = readFromInbox(userId, followingCapped ? null : followingIds, page, pageSize);
 
         // 3.收件箱不足一页（箱深耗尽/无数据）→ DB 拉取兜底补齐
         if (noteList.size() < pageSize) {
@@ -97,7 +102,7 @@ public class GetNoteListByAttention implements GetNotesStrategy {
         return Result.success(resultList);
     }
 
-    /** 收件箱按页读取（LPUSH 最新在前，LRANGE 天然按时间倒序），过滤取关/审核中/已删除 */
+    /** 收件箱按页读取（LPUSH 最新在前，LRANGE 天然按时间倒序），过滤取关/审核中/已删除；followingIds 为 null 时跳过取关过滤 */
     private List<Note> readFromInbox(Integer userId, Set<Integer> followingIds, int page, int pageSize) {
         try {
             String inboxKey = RedisConstant.FEED_INBOX + userId;
@@ -126,7 +131,7 @@ public class GetNoteListByAttention implements GetNotesStrategy {
                     // 待审核的不进关注流；取关作者的不展示
                     .filter(n -> n.getModerationStatus() == null
                             || !"PENDING_REVIEW".equals(n.getModerationStatus()))
-                    .filter(n -> followingIds.contains(n.getUserId()))
+                    .filter(n -> followingIds == null || followingIds.contains(n.getUserId()))
                     .sorted((a, b) -> Long.compare(b.getId(), a.getId())) // 收件箱顺序在批量回源后恢复
                     .collect(Collectors.toList());
             return notes;

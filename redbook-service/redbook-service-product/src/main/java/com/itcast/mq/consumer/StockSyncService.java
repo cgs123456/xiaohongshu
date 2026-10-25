@@ -32,7 +32,12 @@ public class StockSyncService {
                     "skuId={} quantity={}", skuId, quantity);
             return;
         }
-        skuMapper.deductProductStock(buyDto.getProductId(), quantity);
+        int aggregateRows = skuMapper.deductProductStock(buyDto.getProductId(), quantity);
+        if (aggregateRows == 0) {
+            // SKU 已扣成功而聚合列扣不动：聚合展示口径漂移，留日志线索（不影响 SKU 事实库存）
+            log.warn("商品聚合库存扣减未命中（疑似与 SKU 之和漂移），productId={} quantity={}",
+                    buyDto.getProductId(), quantity);
+        }
     }
 
     /** MySQL 两级回补（补偿/关单回滚） */

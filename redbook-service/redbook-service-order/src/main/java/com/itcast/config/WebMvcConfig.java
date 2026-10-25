@@ -17,6 +17,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
         log.info("注册自定义拦截器");
         registry.addInterceptor(new BaseInterceptor())
                 .addPathPatterns("/**")
-                .excludePathPatterns("/user/send/**", "/user/verify");
+                .excludePathPatterns("/user/send/**", "/user/verify")
+                // 支付网关异步回调：外部渠道服务器调用，无登录态/内部令牌，安全靠渠道验签
+                .excludePathPatterns("/order/pay/notify");
     }
 }

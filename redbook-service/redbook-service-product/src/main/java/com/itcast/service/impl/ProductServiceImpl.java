@@ -428,6 +428,15 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public java.util.Map<Integer, Product> selectBatchIds(java.util.List<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        return productMapper.selectBatchIds(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(Product::getId, p -> p, (a, b) -> a));
+    }
+
+    @Override
     public Result<java.util.List<Sku>> getSkus(Integer productId) {
         if (productId == null) {
             return Result.failure("商品ID不能为空");

@@ -44,9 +44,8 @@ public class FeedFanoutService {
                 if (followers == null || followers.isEmpty()) {
                     break;
                 }
-                for (Integer followerId : followers) {
-                    push(RedisConstant.FEED_INBOX + followerId, noteId);
-                }
+                // pipeline 批量 LPUSH+LTRIM：每批 2 次网络往返（此前每个粉丝 2 次）
+                pushBatch(followers, noteId);
                 if (followers.size() < FOLLOWER_PAGE_SIZE) {
                     break;
                 }
@@ -65,6 +64,26 @@ public class FeedFanoutService {
             redisTemplate.opsForList().trim(inboxKey, 0, INBOX_SIZE - 1);
         } catch (Exception e) {
             log.warn("收件箱推送失败，inbox={} noteId={}", inboxKey, noteId, e);
+        }
+    }
+
+    /** KEYS=收件箱 key 列表，ARGV[1]=noteId，ARGV[2]=收件箱容量-1：批量 LPUSH+LTRIM（单次往返） */
+    private static final org.springframework.data.redis.core.script.DefaultRedisScript<Long> PUSH_BATCH_SCRIPT =
+            new org.springframework.data.redis.core.script.DefaultRedisScript<>(
+                    "for i=1,#KEYS do redis.call('lpush', KEYS[i], ARGV[1]) redis.call('ltrim', KEYS[i], 0, ARGV[2]) end return 1",
+                    Long.class);
+
+    /** 一批粉丝的收件箱写入：单条 Lua 一次网络往返完成全部 LPUSH+LTRIM */
+    private void pushBatch(List<Integer> followerIds, Long noteId) {
+        try {
+            java.util.List<String> keys = new java.util.ArrayList<>(followerIds.size());
+            for (Integer followerId : followerIds) {
+                keys.add(RedisConstant.FEED_INBOX + followerId);
+            }
+            redisTemplate.execute(PUSH_BATCH_SCRIPT, keys,
+                    noteId, INBOX_SIZE - 1);
+        } catch (Exception e) {
+            log.warn("收件箱批量推送失败，本批 {} 人（读侧拉模式兜底），noteId={}", followerIds.size(), noteId, e);
         }
     }
 }

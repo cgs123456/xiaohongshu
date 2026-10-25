@@ -7,12 +7,15 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 布隆过滤器工具类。
- * add/mightContain 均用单条 Lua 脚本一次往返完成 5 个 bit 的读写——
- * 此前逐 bit 调 SETBIT/GETBIT，首页每条笔记 5 次 RT（20 条/页 = 100 次网络往返）。
+ * add 单值写入；mightContainBatch 整页批量判定——均用单条 Lua 脚本一次往返完成
+ * 每值 5 个 bit 的读写（此前逐值 EVAL，20 条/页 = 20 次网络往返）。
+ * 参数经 RedisTemplate 的 JSON value 序列化器：offset 必须传 Long（String 会被加引号致 getbit 解析失败）。
  */
 @Component
 public class BloomFilterUtil {
@@ -25,10 +28,16 @@ public class BloomFilterUtil {
             "for i=1,#ARGV do redis.call('setbit', KEYS[1], ARGV[i], 1) end return 'OK'",
             String.class);
 
-    /** KEYS[1]=bitmap key，ARGV[1..n]=offset：任一为 0 返回 0，否则 1 */
-    private static final DefaultRedisScript<Long> CONTAIN_SCRIPT = new DefaultRedisScript<>(
-            "for i=1,#ARGV do if redis.call('getbit', KEYS[1], ARGV[i]) == 0 then return 0 end end return 1",
-            Long.class);
+    /**
+     * KEYS[1]=bitmap key，ARGV 按每 5 个一组对应一个值（Java 侧哈希后的 offset）：
+     * 组内任一 bit 为 0 视为不存在，返回每组 0/1 的数组
+     */
+    private static final DefaultRedisScript<List> CONTAIN_BATCH_SCRIPT = new DefaultRedisScript<>(
+            "local res = {} local n = math.floor(#ARGV / 5) " +
+            "for i = 0, n - 1 do local present = 1 " +
+            "for j = 1, 5 do if redis.call('getbit', KEYS[1], tonumber(ARGV[i * 5 + j])) == 0 then present = 0 break end end " +
+            "res[i + 1] = present end return res",
+            List.class);
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -42,8 +51,6 @@ public class BloomFilterUtil {
     }
 
     public void add(String key, String value) {
-        // 脚本参数走 RedisTemplate 的 JSON value 序列化器：String 会被序列化成带引号的
-        // "\"123\"" 使 setbit 的 offset 解析失败，必须传 Long（序列化为裸数字）
         List<Long> offsets = new ArrayList<>(HASH_SEED.length);
         for (int seed : HASH_SEED) {
             offsets.add((long) hash(value, seed));
@@ -51,12 +58,30 @@ public class BloomFilterUtil {
         redisTemplate.execute(ADD_SCRIPT, Collections.singletonList(key), offsets.toArray());
     }
 
-    public boolean mightContain(String key, String value) {
-        List<Long> offsets = new ArrayList<>(HASH_SEED.length);
-        for (int seed : HASH_SEED) {
-            offsets.add((long) hash(value, seed));
+    /**
+     * 整页批量判定：一次 EVAL 返回所有值的存在性。
+     * @return 判定为"可能已存在"的值集合（布隆语义：存在=可能存在，不存在=一定不存在）
+     */
+    @SuppressWarnings("unchecked")
+    public Set<String> mightContainBatch(String key, List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptySet();
         }
-        Long r = redisTemplate.execute(CONTAIN_SCRIPT, Collections.singletonList(key), offsets.toArray());
-        return Long.valueOf(1L).equals(r);
+        List<Long> offsets = new ArrayList<>(values.size() * HASH_SEED.length);
+        for (String value : values) {
+            for (int seed : HASH_SEED) {
+                offsets.add((long) hash(value, seed));
+            }
+        }
+        List<Long> flags = redisTemplate.execute(CONTAIN_BATCH_SCRIPT, Collections.singletonList(key), offsets.toArray());
+        Set<String> present = new HashSet<>();
+        if (flags != null) {
+            for (int i = 0; i < values.size() && i < flags.size(); i++) {
+                if (flags.get(i) != null && flags.get(i) == 1L) {
+                    present.add(values.get(i));
+                }
+            }
+        }
+        return present;
     }
 }

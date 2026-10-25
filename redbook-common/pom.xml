@@ -53,6 +53,20 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
         </dependency>
+
+        <!-- MQ 消费者公共辅助（MqConsumerSupport）所需；scope=provided：
+             仅 common 自身编译用，不传递给依赖方（网关等无 AMQP 的服务不受影响），
+             消费者服务自身的 amqp/redis starter 在运行时提供这些类 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
 </project>

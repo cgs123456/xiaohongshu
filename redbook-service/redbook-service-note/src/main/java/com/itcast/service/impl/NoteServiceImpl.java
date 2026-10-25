@@ -190,6 +190,10 @@ public class NoteServiceImpl implements NoteService {
                     new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
             update.eq(Note::getId, noteId).set(Note::getModerationStatus, null);
             noteMapper.update(null, update);
+            // 放行时补发关注流扇出：发布期 PENDING_REVIEW 笔记不扇出，放行后此刻才进粉丝收件箱
+            final Long approvedNoteId = noteId;
+            final Integer authorId = note.getUserId();
+            threadPoolTaskExecutor.execute(() -> feedFanoutService.fanout(approvedNoteId, authorId));
             log.info("审核放行，noteId={}", noteId);
         } else {
             noteMapper.deleteById(noteId);

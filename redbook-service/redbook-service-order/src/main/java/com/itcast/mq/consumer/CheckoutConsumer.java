@@ -44,7 +44,7 @@ public class CheckoutConsumer {
         if (messageId == null || messageId.isBlank()) {
             // 缺失 messageId 无法做幂等（deliveryTag 重启后重数会误判），视为毒消息
             log.error("结算消息缺少 messageId，转入死信，payload={}", payload);
-            safeNack(channel, deliveryTag, false);
+            com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, false, "结算消息");
             return;
         }
 
@@ -54,21 +54,21 @@ public class CheckoutConsumer {
             log.info("结算消息处理成功，messageId={}", messageId);
         } catch (DuplicateMessageException e) {
             log.warn("结算消息重复，跳过，messageId={}", messageId);
-            safeAck(channel, deliveryTag);
+            com.itcast.mq.MqConsumerSupport.safeAck(channel, deliveryTag, "结算消息");
         } catch (IllegalArgumentException e) {
             log.error("结算消息参数非法，转入死信，messageId={}", messageId, e);
             redisTemplate.delete(RETRY_KEY + messageId);
-            safeNack(channel, deliveryTag, false);
+            com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, false, "结算消息");
         } catch (Exception e) {
-            long retryCount = nextRetryCount(messageId);
+            long retryCount = com.itcast.mq.MqConsumerSupport.nextRetryCount(redisTemplate, RETRY_KEY, messageId);
             if (retryCount > MAX_RETRY_COUNT) {
                 log.error("结算消息重试超限进死信，messageId={}", messageId, e);
                 redisTemplate.delete(RETRY_KEY + messageId);
-                safeNack(channel, deliveryTag, false);
+                com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, false, "结算消息");
             } else {
                 log.error("结算消息处理异常，退避重试，messageId={} 第 {} 次", messageId, retryCount, e);
-                sleepBackoff(retryCount);
-                safeNack(channel, deliveryTag, true);
+                com.itcast.mq.MqConsumerSupport.sleepBackoff(retryCount);
+                com.itcast.mq.MqConsumerSupport.safeNack(channel, deliveryTag, true, "结算消息");
             }
         }
     }
@@ -80,41 +80,7 @@ public class CheckoutConsumer {
         deadLetterRecorder.record("checkout", message, channel, deliveryTag);
     }
 
-    private long nextRetryCount(String messageId) {
-        try {
-            String key = RETRY_KEY + messageId;
-            Long count = redisTemplate.opsForValue().increment(key);
-            if (count != null && count == 1) {
-                redisTemplate.expire(key, 24, TimeUnit.HOURS);
-            }
-            return count == null ? 1 : count;
-        } catch (Exception ex) {
-            log.error("记录结算重试次数失败，messageId={}", messageId, ex);
-            return 1;
-        }
-    }
 
-    private void sleepBackoff(long retryCount) {
-        try {
-            Thread.sleep(Math.min(1000L * (1L << (retryCount - 1)), 8000));
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
-    }
 
-    private void safeAck(Channel channel, long deliveryTag) {
-        try {
-            channel.basicAck(deliveryTag, false);
-        } catch (Exception ex) {
-            log.error("确认消息异常", ex);
-        }
-    }
 
-    private void safeNack(Channel channel, long deliveryTag, boolean requeue) {
-        try {
-            channel.basicNack(deliveryTag, false, requeue);
-        } catch (Exception ex) {
-            log.error("拒绝消息异常", ex);
-        }
-    }
 }
