@@ -17,7 +17,11 @@ public class TopicServiceImpl implements TopicService {
 
     @Override
     public Result<List<Topic>> getTopics() {
-        List<Topic> topics = topicMapper.selectList(null);
+        // 热度倒序取前 50：话题表无界增长且全量返回会拖垮接口（每个新话题都会建行）
+        List<Topic> topics = topicMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Topic>()
+                        .orderByDesc(Topic::getHot)
+                        .last("LIMIT 50"));
         return Result.success(topics);
     }
 }

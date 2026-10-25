@@ -69,7 +69,7 @@ my-redbook/
 - 笔记发布（图文、话题标签）
 - 笔记浏览（多种策略：推荐、关注、收藏、点赞、浏览、同城，均支持分页 + 批量查询）
 - 点赞 / 收藏（唯一键幂等 + 计数条件更新，Redis/MQ 操作事务提交后执行）
-- 评论系统（MongoDB 存储，批量组装用户信息）
+- 评论系统（MongoDB 存储，一级评论分页 + 楼中楼归组，批量组装用户信息）
 - 敏感词过滤（内存缓存 + 定时刷新）、布隆过滤器（防重复推荐）
 
 ### 商品模块
@@ -81,9 +81,11 @@ my-redbook/
 
 ### 订单模块
 
+- **购物车结算下单**（多商品一单）：收货信息 + 优惠券门槛校验 + 商品快照（`/cart/checkout`），订单含明细表/金额拆解/收货地址
+- 模拟支付（`/order/pay/{orderId}`，乐观状态机 + 支付流水表），订单列表含明细（`/order/getOrderList`）
 - 下单流程（Saga 分布式事务）
 - 异步下单（RabbitMQ 消息队列，UUID messageId 幂等 + 重试上限 + 死信队列）
-- **订单超时关单**：15 分钟延迟消息（死信队列方案）自动取消待支付订单并回补 Redis/MySQL 库存，定时任务兜底扫描
+- **订单超时关单**：15 分钟延迟消息（死信队列方案）自动取消待支付订单、按明细回补库存并退还优惠券；回补/退券失败进 Redis 补偿队列由定时任务重试，兜底扫描 + 订单死信落表（`rb_order_dead_message`）
 - 订单管理（分页查询）
 
 ### 搜索模块
@@ -180,86 +182,44 @@ docker compose up -d
 | 容器名                   | 服务            | 端口             | 默认账号              |
 | --------------------- | ------------- | -------------- | ----------------- |
 | redbook-nacos         | Nacos         | 8848, 9848     | nacos/nacos       |
-| redbook-mysql         | MySQL         | 3307（外部）→ 3306 | root/root123      |
+| redbook-mysql         | MySQL         | 3306 | root/root123      |
 | redbook-redis         | Redis         | 6379           | 密码: redis123      |
 | redbook-rabbitmq      | RabbitMQ      | 5672, 15672    | admin/rabbitmq123 |
 | redbook-mongodb       | MongoDB       | 27017          | root/mongo123     |
-| redbook-elasticsearch | Elasticsearch | 9200, 9300     | 无安全认证             |
-| redbook-zookeeper     | ZooKeeper     | 2181           | -                 |
-| redbook-kafka         | Kafka         | 9092           | -                 |
+| redbook-elasticsearch | Elasticsearch | 9200, 9300     | elastic/es123     |
 
 ### 2. 环境变量配置
 
+所有凭据统一放在仓库根目录 `.env` 文件（已被 .gitignore 排除），模板见 `.env.example`：
+
 ```bash
-# 数据库
-export DB_PASSWORD=your_db_password
-export DB_USERNAME=root
-
-# Redis
-export REDIS_PASSWORD=your_redis_password
-
-# RabbitMQ
-export RABBITMQ_PASSWORD=your_rabbitmq_password
-
-# MongoDB
-export MONGO_PASSWORD=your_mongo_password
-
-# JWT 密钥（建议 64 位以上随机字符串）
-export JWT_SECRET_KEY=your_secure_jwt_secret_key
-
-# Aliyun OSS
-export OSS_ACCESS_KEY_ID=your_access_key_id
-export OSS_ACCESS_KEY_SECRET=your_access_key_secret
-export OSS_BUCKET_NAME=your_bucket_name
-
-# DeepSeek API（AI 审核 / 笔记类型 / 摘要生成）
-export DEEPSEEK_API_KEY=your_deepseek_api_key
-
-# Embedding 向量化服务（ES 混合检索，可选，默认禁用）
-export EMBEDDING_ENABLED=true
-export EMBEDDING_API_URL=https://api.openai.com/v1
-export EMBEDDING_API_KEY=your_embedding_api_key
-export EMBEDDING_MODEL=text-embedding-v3
-
-# 购物 Agent AI 编排端点
-export AGENT_AI_CHAT_URL=http://localhost:10010/ai/agent/chat
+cp .env.example .env
+# 编辑 .env，填入以下真实值：
+#   MYSQL_ROOT_PASSWORD / DB_USERNAME / DB_PASSWORD   MySQL
+#   REDIS_PASSWORD / RABBITMQ_PASSWORD / MONGO_PASSWORD   中间件
+#   ES_PASSWORD                                       Elasticsearch（与 compose 中 ELASTIC_PASSWORD 一致）
+#   INTERNAL_TOKEN                                    服务间内部调用令牌（各服务一致；不设置则内部接口禁用）
+#   JWT_SECRET_KEY                                    JWT 密钥（建议 64 位以上随机字符串）
+#   DEEPSEEK_API_KEY                                  DeepSeek（AI 审核/分类/摘要，无效时自动降级）
+#   EMBEDDING_API_URL / EMBEDDING_API_KEY / EMBEDDING_MODEL   向量化服务（可选，默认禁用）
 ```
 
-### 3. 启动后端服务
+Aliyun OSS 凭证（图片上传，无效时自动降级为无图发布）在 `redbook-service/redbook-service-note/src/main/resources/application.yml` 中配置。
+
+### 3. 启动后端服务（推荐：容器化编排）
 
 ```bash
-# 编译项目
-cd my-redbook
+# 编译全部模块（需要 JDK 17+ 与 Maven）
 mvn clean package -DskipTests
 
-# 依次启动各服务（顺序建议）
-# 1. 网关
-java -jar redbook-gateway/target/redbook-gateway-1.0-SNAPSHOT.jar
-
-# 2. 用户服务
-java -jar redbook-service/redbook-service-user/target/redbook-service-user-1.0-SNAPSHOT.jar
-
-# 3. 笔记服务
-java -jar redbook-service/redbook-service-note/target/redbook-service-note-1.0-SNAPSHOT.jar
-
-# 4. 商品服务
-java -jar redbook-service/redbook-service-product/target/redbook-service-product-1.0-SNAPSHOT.jar
-
-# 5. 订单服务
-java -jar redbook-service/redbook-service-order/target/redbook-service-order-1.0-SNAPSHOT.jar
-
-# 6. 评论服务
-java -jar redbook-service/redbook-service-comment/target/redbook-service-comment-1.0-SNAPSHOT.jar
-
-# 7. 搜索服务
-java -jar redbook-service/redbook-service-search/target/redbook-service-search-1.0-SNAPSHOT.jar
-
-# 8. 消息服务（Netty WebSocket）
-java -jar redbook-service/redbook-service-message/target/redbook-service-message-1.0-SNAPSHOT.jar
-
-# 9. AI 服务
-java -jar redbook-service/redbook-service-ai/target/redbook-service-ai-1.0-SNAPSHOT.jar
+# 一键启动 9 个后端服务容器（网关/用户/笔记/商品/订单/评论/搜索/消息/AI），
+# 复用步骤 1 的基础设施网络，配置全部来自 .env
+docker compose -f docker-compose.app.yml --env-file .env up -d --build
 ```
+
+服务间通过容器名互访（mysql/redis/rabbitmq/nacos/elasticsearch），对外端口与"服务端口"表一致。
+
+备选：宿主机直接 `java -jar` 依次启动（顺序：gateway → user → note → product → order → comment → search → message → ai），或使用 `scripts/start-all.sh`；注意部分受限环境下宿主 JDK 的 NIO 存在兼容问题，此时务必使用容器化方式。
 
 ### 4. 启动前端
 

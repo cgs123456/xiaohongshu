@@ -35,11 +35,12 @@ export interface NoteVo {
     comment?: number | null
 }
 
-// 获取笔记列表（page/pageSize 可选，后端默认 1/20）
-export const getNoteList = (page?: number, pageSize?: number) => {
-    const params: Record<string, number> = {}
+// 获取笔记列表（page/pageSize 可选，后端默认 1/20；type 为分类筛选，与首页分类栏一致）
+export const getNoteList = (page?: number, pageSize?: number, type?: string) => {
+    const params: Record<string, number | string> = {}
     if (page !== undefined) params.page = page
     if (pageSize !== undefined) params.pageSize = pageSize
+    if (type) params.type = type
     return request.get<void, ApiResponse<NoteVo[]>>('/note/getNoteList', { params })
 }
 

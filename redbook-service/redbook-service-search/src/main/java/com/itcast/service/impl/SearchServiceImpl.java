@@ -61,7 +61,8 @@ public class SearchServiceImpl implements SearchService {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    @Autowired
+    /** embedding.enabled=false 时 common 中不注册该 Bean，必须可选注入 */
+    @Autowired(required = false)
     private EmbeddingService embeddingService;
 
     @Override
@@ -79,22 +80,18 @@ public class SearchServiceImpl implements SearchService {
             noteVos.add(noteVo);
         }
 
-        // 3.保存搜索记录（去重）
+        // 3.保存搜索记录（唯一键 uk_user_history 兜底去重，并发下 select-then-insert 竞态由 DuplicateKeyException 吸收）
         try {
             Integer currentUserId = UserContext.getUserId();
-            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<History> queryWrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
-            queryWrapper.eq(History::getUserId, currentUserId)
-                       .eq(History::getHistory, key);
-            History existingHistory = historyMapper.selectOne(queryWrapper);
-
-            if (existingHistory != null) {
-                log.info("搜索记录已存在，更新: userId={}, key={}", currentUserId, key);
-            } else {
+            if (currentUserId != null) {
                 History history = new History();
                 history.setHistory(key);
                 history.setUserId(currentUserId);
-                historyMapper.insert(history);
+                try {
+                    historyMapper.insert(history);
+                } catch (org.springframework.dao.DuplicateKeyException dke) {
+                    log.info("搜索记录已存在（唯一键兜底），userId={}, key={}", currentUserId, key);
+                }
             }
         } catch (Exception e) {
             log.error("保存搜索历史失败", e);
@@ -149,7 +146,17 @@ public class SearchServiceImpl implements SearchService {
      * - 不可用 → 降级纯 BM25 Top20
      */
     private List<Note> searchNotes(String key) {
-        if (embeddingService.isAvailable()) {
+        try {
+            return doSearchNotes(key);
+        } catch (org.springframework.data.elasticsearch.NoSuchIndexException e) {
+            // 索引尚不存在（新环境无笔记发布过）按空结果处理，而非 500
+            log.warn("ES 索引不存在，返回空结果: {}", e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    private List<Note> doSearchNotes(String key) {
+        if (embeddingService != null && embeddingService.isAvailable()) {
             try {
                 return hybridSearch(key);
             } catch (Exception e) {
@@ -159,7 +166,7 @@ public class SearchServiceImpl implements SearchService {
         return bm25Search(key, RRF_FINAL);
     }
 
-    /** BM25 + kNN 混合检索 + RRF 融合 */
+    /** BM25 + kNN 混合检索：优先 ES 8.15 单请求 rrf retriever（一次往返），失败回退双查询融合 */
     private List<Note> hybridSearch(String key) {
         // 1.生成查询向量
         float[] queryEmbedding = embeddingService.embed(key);
@@ -168,6 +175,47 @@ public class SearchServiceImpl implements SearchService {
             return bm25Search(key, RRF_FINAL);
         }
 
+        // 2.单请求 rrf retriever：standard(BM25) + knn 两路在 ES 服务端融合
+        try {
+            String vectorJson = toFloatList(queryEmbedding).stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+            String json = "{" +
+                    "\"retriever\":{" +
+                        "\"rrf\":{" +
+                            "\"retrievers\":[" +
+                                "{\"standard\":{\"query\":{\"multi_match\":{\"query\":\"" + escapeJson(key) + "\",\"fields\":[\"title\",\"content\",\"summary\"]}},\"size\":" + BM25_TOP + "}," +
+                                "{\"knn\":{\"field\":\"embedding\",\"query_vector\":" + vectorJson + ",\"num_candidates\":" + KNN_CANDIDATES + "}" +
+                            "]," +
+                            "\"rank_constant\":" + RRF_K + "," +
+                            "\"rank_window_size\":" + Math.max(BM25_TOP, KNN_TOP) +
+                        "}" +
+                    "}," +
+                    "\"size\":" + RRF_FINAL + "}";
+            org.springframework.data.elasticsearch.core.query.StringQuery retrieverQuery =
+                    new org.springframework.data.elasticsearch.core.query.StringQuery(json);
+            SearchHits<Note> hits = elasticsearchOperations.search(
+                    retrieverQuery, Note.class, IndexCoordinates.of("rb_note"));
+            List<Note> result = hits.getSearchHits().stream()
+                    .map(SearchHit::getContent)
+                    .filter(n -> n.getId() != null)
+                    .collect(java.util.stream.Collectors.toList());
+            if (!result.isEmpty()) {
+                return result;
+            }
+        } catch (Exception e) {
+            log.warn("单请求 rrf retriever 失败，回退双查询 RRF: {}", e.getMessage());
+        }
+
+        return hybridSearchTwoTrips(key, queryEmbedding);
+    }
+
+    private String escapeJson(String s) {
+        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** 旧版混合检索：两次 ES 往返 + 客户端 RRF 融合（作为 retriever 的回退路径保留） */
+    private List<Note> hybridSearchTwoTrips(String key, float[] queryEmbedding) {
         // 2.BM25 文本检索 Top50（title + content + AI 摘要 summary）
         Query bm25Query = NativeQuery.builder()
                 .withQuery(q -> q.multiMatch(m -> m

@@ -42,3 +42,7 @@ buildNumber.properties
 # Node
 node_modules/
 .npm-cache/
+
+# 本地运行凭据（真实值不入库）
+.env
+.run/

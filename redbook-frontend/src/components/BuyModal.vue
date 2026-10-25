@@ -20,7 +20,7 @@
               </div>
             </div>
 
-            <!-- 属性选择 -->
+            <!-- 商品属性（当前购物车/结算链路不落 SKU 变体，仅展示；变体随单需 SKU 改造，见项目审查报告） -->
             <div class="attributes-section" v-if="attributes && attributes.length > 0">
               <div 
                 v-for="(attr, index) in attributes" 
@@ -29,69 +29,13 @@
               >
                 <div class="attribute-label">{{ attr.label }}</div>
                 <div class="attribute-options">
-                  <button
+                  <span
                     v-for="(option, optIndex) in attr.value"
                     :key="optIndex"
-                    class="attribute-option"
-                    :class="{ active: isAttributeSelected(index, option) }"
-                    @click="selectAttribute(index, option)"
+                    class="attribute-option static"
                   >
                     {{ option }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 优惠券选择 -->
-            <div class="coupon-section">
-              <div class="section-title">优惠券</div>
-              <div v-if="loadingCoupons" class="coupon-loading">
-                <Icon icon="mdi:loading" class="loading-icon" width="20" />
-                加载中...
-              </div>
-              <div v-else-if="coupons.length === 0" class="no-coupon">
-                暂无可用优惠券
-              </div>
-              <div v-else class="coupon-list">
-                <div 
-                  v-for="couponVo in coupons" 
-                  :key="couponVo.coupon.id"
-                  class="coupon-item"
-                  :class="{ 
-                    active: selectedCouponId === couponVo.coupon.id,
-                    disabled: !couponVo.isUsable
-                  }"
-                  @click="selectCoupon(couponVo)"
-                >
-                  <div class="coupon-left">
-                    <!-- 类型1：满减券 -->
-                    <div v-if="couponVo.coupon.type === '1'" class="coupon-discount">
-                      <span class="discount-symbol">¥</span>
-                      <span class="discount-value">{{ couponVo.coupon.discount }}</span>
-                    </div>
-                    <!-- 类型2：折扣券 -->
-                    <div v-else-if="couponVo.coupon.type === '2'" class="coupon-discount">
-                      <span class="discount-value">{{ couponVo.coupon.discount }}</span>
-                      <span class="discount-unit">折</span>
-                    </div>
-                  </div>
-                  <div class="coupon-right">
-                    <div class="coupon-name">{{ couponVo.coupon.name }}</div>
-                    <div class="coupon-desc">{{ getCouponTypeText(couponVo.coupon.type) }}</div>
-                  </div>
-                  <div class="coupon-check" v-if="selectedCouponId === couponVo.coupon.id">
-                    <Icon icon="mdi:check-circle" width="20" />
-                  </div>
-                </div>
-                <div 
-                  class="coupon-item no-coupon-option"
-                  :class="{ active: selectedCouponId === null }"
-                  @click="selectCoupon(null)"
-                >
-                  <div class="coupon-text">不使用优惠券</div>
-                  <div class="coupon-check" v-if="selectedCouponId === null">
-                    <Icon icon="mdi:check-circle" width="20" />
-                  </div>
+                  </span>
                 </div>
               </div>
             </div>
@@ -102,28 +46,15 @@
                 <span class="summary-label">商品金额</span>
                 <span class="summary-value">¥{{ product.price }}</span>
               </div>
-              <div class="summary-row" v-if="selectedCouponId">
-                <span class="summary-label">优惠券</span>
-                <span class="summary-value discount">-¥{{ selectedCouponDiscount }}</span>
-              </div>
-              <div class="summary-row total">
-                <span class="summary-label">实付金额</span>
-                <span class="summary-value">¥{{ finalPrice }}</span>
-              </div>
             </div>
 
-            <!-- 提示信息 -->
-            <div class="tip-text" v-if="attributes && attributes.length > 0 && !allAttributesSelected">
-              <Icon icon="mdi:information-outline" width="16" />
-              请选择所有商品属性
-            </div>
           </div>
 
           <div class="modal-footer">
             <button class="btn btn-cancel" @click="handleClose">取消</button>
             <button
               class="btn btn-confirm"
-              :disabled="!product || !allAttributesSelected || loading"
+              :disabled="!product || loading"
               @click="handleConfirm"
             >
               <span v-if="loading">购买中...</span>
@@ -133,13 +64,22 @@
         </div>
       </div>
     </Transition>
+
+    <!-- 结算弹层（收货信息与优惠券在结算时选择） -->
+    <CheckoutModal
+      v-model:visible="checkoutVisible"
+      :product-ids="checkoutProductIds"
+      :amount="checkoutAmount"
+      :item-count="1"
+      @success="handleCheckoutSuccess"
+    />
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Icon } from '@iconify/vue'
-import { buyProduct, getCouponsByUserId, useCoupon, type CustomAttribute, type CouponVo } from '../api/product'
+import { ref, watch } from 'vue'
+import { addToCart, type CustomAttribute } from '../api/product'
+import CheckoutModal from './CheckoutModal.vue'
 import { useToast } from '../composables/useToast'
 
 const { showToast } = useToast()
@@ -165,91 +105,16 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const selectedAttributes = ref<Map<number, string>>(new Map())
 const loading = ref(false)
-const loadingCoupons = ref(false)
-const coupons = ref<CouponVo[]>([])
-const selectedCouponId = ref<number | null>(null)
+const checkoutVisible = ref(false)
+const checkoutProductIds = ref<number[]>([])
+const checkoutAmount = ref(0)
 
-// 监听弹窗打开，重置选择并加载优惠券
-watch(() => props.visible, async (newVisible) => {
+// 监听弹窗打开，重置状态
+watch(() => props.visible, (newVisible) => {
   if (newVisible) {
-    selectedAttributes.value.clear()
-    selectedCouponId.value = null
-    await loadCoupons()
+    checkoutAmount.value = 0
   }
-})
-
-// 加载优惠券列表
-const loadCoupons = async () => {
-  try {
-    loadingCoupons.value = true
-    const response = await getCouponsByUserId()
-    coupons.value = response.data || []
-  } catch (error) {
-    // 加载优惠券失败
-  } finally {
-    loadingCoupons.value = false
-  }
-}
-
-// 选择属性
-const selectAttribute = (attrIndex: number, option: string) => {
-  selectedAttributes.value.set(attrIndex, option)
-}
-
-// 判断属性是否被选中
-const isAttributeSelected = (attrIndex: number, option: string) => {
-  return selectedAttributes.value.get(attrIndex) === option
-}
-
-// 选择优惠券
-const selectCoupon = (couponVo: CouponVo | null) => {
-  if (couponVo && !couponVo.isUsable) return
-  selectedCouponId.value = couponVo ? couponVo.coupon.id : null
-}
-
-// 获取优惠券类型文本
-const getCouponTypeText = (type: string) => {
-  if (type === '1') return '满减券'
-  if (type === '2') return '折扣券'
-  return '优惠券'
-}
-
-// 获取选中优惠券的折扣金额
-const selectedCouponDiscount = computed(() => {
-  if (!selectedCouponId.value || !props.product) return 0
-  const couponVo = coupons.value.find(c => c.coupon.id === selectedCouponId.value)
-  if (!couponVo) return 0
-  
-  const coupon = couponVo.coupon
-  // 类型1：满减券，直接减去discount金额
-  if (coupon.type === '1') {
-    return coupon.discount
-  }
-  // 类型2：折扣券，计算折扣后的优惠金额（用"分"计算避免浮点精度误差）
-  if (coupon.type === '2') {
-    const discountRate = coupon.discount / 10 // 例如：8折 = 0.8
-    const priceCents = Math.round(props.product.price * 100)
-    return (priceCents - Math.round(priceCents * discountRate)) / 100
-  }
-  return 0
-})
-
-// 计算最终价格（用"分"计算避免浮点精度误差，如 0.1+0.2）
-const finalPrice = computed(() => {
-  if (!props.product) return 0
-  const priceCents = Math.round(props.product.price * 100)
-  const discountCents = Math.round(selectedCouponDiscount.value * 100)
-  return (Math.max(priceCents - discountCents, 0) / 100).toFixed(2)
-})
-
-// 检查是否所有属性都已选择
-const allAttributesSelected = computed(() => {
-  if (!props.attributes || props.attributes.length === 0) {
-    return true
-  }
-  return selectedAttributes.value.size === props.attributes.length
 })
 
 // 关闭弹窗
@@ -257,53 +122,29 @@ const handleClose = () => {
   emit('update:visible', false)
 }
 
-// 确认购买
+// 确认购买：加入购物车后打开结算弹层（收货信息/优惠券/价格门槛校验统一在结算链路处理）
 const handleConfirm = async () => {
-  if (!props.product || !allAttributesSelected.value) return
-  
+  if (!props.product) return
+
   try {
     loading.value = true
-    
-    // 构建选中的属性数据
-    const selectAttributes: Array<{ label: string; value: string[] }> = []
-    
-    if (props.attributes) {
-      props.attributes.forEach((attr, index) => {
-        const selectedValue = selectedAttributes.value.get(index)
-        if (selectedValue) {
-          selectAttributes.push({
-            label: attr.label,
-            value: [selectedValue]
-          })
-        }
-      })
-    }
-    
-    // 调用购买接口（业务错误已由拦截器统一 reject）
-    await buyProduct({
-      productId: props.product.id,
-      selectAttributes,
-      couponId: selectedCouponId.value || undefined
-    })
-
-    // 购买成功后，如果使用了优惠券，调用使用优惠券接口
-    if (selectedCouponId.value) {
-      try {
-        await useCoupon(selectedCouponId.value)
-      } catch (error) {
-        // 优惠券使用失败不影响购买成功的提示
-      }
-    }
-
-    showToast('购买成功！', 'success')
-    emit('success')
-    handleClose()
+    await addToCart(props.product.id, 1)
+    checkoutProductIds.value = [props.product.id]
+    checkoutAmount.value = props.product.price
+    checkoutVisible.value = true
   } catch (error: unknown) {
-    const errorMsg = error instanceof Error ? error.message : '购买失败，请稍后重试'
+    const errorMsg = error instanceof Error ? error.message : '加购失败，请稍后重试'
     showToast(errorMsg, 'error')
   } finally {
     loading.value = false
   }
+}
+
+// 结算成功：关闭购买弹层并通知父组件刷新（购物车角标等）
+const handleCheckoutSuccess = () => {
+  checkoutVisible.value = false
+  emit('success')
+  handleClose()
 }
 </script>
 
@@ -422,7 +263,7 @@ const handleConfirm = async () => {
   gap: 10px;
 }
 
-.attribute-option {
+.attribute-option.static {
   padding: 8px 20px;
   border: 1px solid #ddd;
   background: white;
@@ -433,29 +274,9 @@ const handleConfirm = async () => {
   transition: all 0.2s;
 }
 
-.attribute-option:hover {
-  border-color: #ff2442;
-  color: #ff2442;
-}
 
-.attribute-option.active {
-  border-color: #ff2442;
-  background: #fff5f5;
-  color: #ff2442;
-  font-weight: 500;
-}
 
 /* 提示信息 */
-.tip-text {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px;
-  background: #fff7e6;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #ff9800;
-}
 
 /* 优惠券选择 */
 .coupon-section {

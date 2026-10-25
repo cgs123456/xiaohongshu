@@ -49,8 +49,16 @@ public class ShoppingAgentService {
     @Autowired
     private FewShotStore fewShotStore;
 
-    /** AI 服务 agent/chat 接口地址（通过网关访问） */
-    @Value("${agent.ai-chat-url:http://localhost:10010/ai/agent/chat}")
+    /** 下单确认状态（按用户）：pending 表示 Agent 已发起下单待用户表态，confirmed 表示用户已在新一轮回复中表态 */
+    @Autowired
+    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+
+    public static final String ORDER_PENDING_KEY = "agent:order:pending:";
+    public static final String ORDER_CONFIRMED_KEY = "agent:order:confirmed:";
+    private static final java.time.Duration CONFIRM_TTL = java.time.Duration.ofMinutes(10);
+
+    /** AI 服务 agent/chat 接口地址（直连 ai 服务，绕过网关——内部调用不带用户 token，走网关会被鉴权过滤器拒绝） */
+    @Value("${agent.ai-chat-url:http://localhost:8091/ai/agent/chat}")
     private String aiChatUrl;
 
     /** 最大工具调用轮数（防止死循环） */
@@ -79,8 +87,21 @@ public class ShoppingAgentService {
         List<AgentMessage> history = conversationStore.getHistory(userId, conversationId);
         history.add(new AgentMessage("user", userMessage));
 
+        // 2.5 下单确认协议：上一轮 Agent 询问过"是否下单"（pending 标记存在），
+        //     用户本轮的回复即视为表态——置 confirmed 标记，由 LLM 根据用户答复内容
+        //     决定是否真的调用 create_order（否定答复时 LLM 不应调用）
+        try {
+            String pendingKey = ORDER_PENDING_KEY + userId;
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(pendingKey))) {
+                redisTemplate.delete(pendingKey);
+                redisTemplate.opsForValue().set(ORDER_CONFIRMED_KEY + userId, "1", CONFIRM_TTL);
+            }
+        } catch (Exception e) {
+            log.warn("处理下单确认状态失败，userId={}", userId, e);
+        }
+
         // 3. 构建 system prompt（工具说明 + Few-Shot）
-        String systemPrompt = systemPromptBuilder.build();
+        String systemPrompt = systemPromptBuilder.build(userId);
 
         // 4. 编排循环
         String finalReply = null;
@@ -100,7 +121,7 @@ public class ShoppingAgentService {
                 // B) 格式错误的函数调用尝试 → 记录失败样本 + 提示 LLM 重试
                 if (functionCallParser.looksLikeFunctionCallAttempt(llmOutput)) {
                     // 情况 B：记录失败样本到 Few-Shot 池（用于后续注入 system prompt 提升正确率）
-                    fewShotStore.recordSample(userMessage, llmOutput, false);
+                    fewShotStore.recordSample(userId, userMessage, llmOutput, false);
                     log.warn("Agent 输出格式错误，提示重试 round={} output={}", round, llmOutput);
                     history.add(new AgentMessage("assistant", llmOutput));
                     history.add(new AgentMessage("tool",
@@ -114,7 +135,7 @@ public class ShoppingAgentService {
             }
 
             // 是 FunctionCall → 记录为成功样本
-            fewShotStore.recordSample(userMessage, llmOutput, true);
+            fewShotStore.recordSample(userId, userMessage, llmOutput, true);
 
             // 执行工具
             String toolResult = toolExecutor.execute(call);

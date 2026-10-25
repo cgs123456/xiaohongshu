@@ -46,7 +46,7 @@ mybatis-plus:
 # Shopping Agent 配置
 agent:
   # AI 服务 agent/chat 接口地址（通过网关访问）
-  ai-chat-url: ${AGENT_AI_CHAT_URL:http://localhost:10010/ai/agent/chat}
+  ai-chat-url: ${AGENT_AI_CHAT_URL:http://localhost:8091/ai/agent/chat}
 
 # 内部接口令牌（order 服务调用 /product/helper/restoreStock 时需携带一致的令牌）
 internal:

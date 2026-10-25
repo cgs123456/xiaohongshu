@@ -28,5 +28,10 @@ public class NoteStrategyContext {
      * 纬度
      */
     private String latitude;
+
+    /**
+     * 笔记类型（可选，首页分类筛选）
+     */
+    private String type;
 }
 

@@ -1,0 +1,95 @@
+# 全栈应用层编排：9 个后端服务（依赖 docker-compose.yml 的基础设施，external network 共享）
+# 用法：
+#   docker compose --env-file .env up -d          # 先起基础设施
+#   docker compose -f docker-compose.app.yml --env-file .env up -d --build
+# 镜像内通过容器名互访：MYSQL_HOST=mysql、NACOS_ADDR=nacos:8848 等
+services:
+  user:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-user/target/redbook-service-user-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-user
+    environment: &svc-env
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD}
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      NACOS_ADDR: nacos:8848
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      RABBITMQ_USERNAME: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MONGO_URI: ${MONGO_URI_HOST:-mongodb://root:${MONGO_PASSWORD}@mongodb:27017/redbook?authSource=admin}
+      ES_PASSWORD: ${ES_PASSWORD}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      EMBEDDING_ENABLED: "false"
+    ports: [ "8080:8080" ]
+    restart: unless-stopped
+
+  note:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-note/target/redbook-service-note-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-note
+    environment:
+      <<: *svc-env
+      ES_HOST: elasticsearch
+    ports: [ "8085:8085" ]
+    restart: unless-stopped
+
+  product:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-product/target/redbook-service-product-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-product
+    environment:
+      <<: *svc-env
+      AGENT_AI_CHAT_URL: http://ai:8091/ai/agent/chat
+    ports: [ "8095:8095" ]
+    restart: unless-stopped
+
+  order:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-order/target/redbook-service-order-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-order
+    environment: *svc-env
+    ports: [ "8105:8105" ]
+    restart: unless-stopped
+
+  comment:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-comment/target/redbook-service-comment-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-comment
+    environment: *svc-env
+    ports: [ "8100:8100" ]
+    restart: unless-stopped
+
+  search:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-search/target/redbook-service-search-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-search
+    environment:
+      <<: *svc-env
+      ES_HOST: elasticsearch
+    ports: [ "8090:8090" ]
+    restart: unless-stopped
+
+  message:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-message/target/redbook-service-message-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-message
+    environment: *svc-env
+    ports: [ "8888:8888", "8889:8889" ]
+    restart: unless-stopped
+
+  ai:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-service/redbook-service-ai/target/redbook-service-ai-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-ai
+    environment:
+      <<: *svc-env
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    ports: [ "8091:8091" ]
+    restart: unless-stopped
+
+  gateway:
+    build: { context: ., dockerfile: docker/service.Dockerfile, args: { JAR_FILE: redbook-gateway/target/redbook-gateway-1.0-SNAPSHOT.jar } }
+    container_name: redbook-app-gateway
+    environment: *svc-env
+    ports: [ "10010:10010" ]
+    restart: unless-stopped
+
+networks:
+  default:
+    name: xiaohongshu_default
+    external: true

@@ -14,4 +14,10 @@ public interface CouponMapper extends BaseMapper<Coupon> {
      */
     @Update("UPDATE rb_coupon SET stock = stock - 1 WHERE id = #{couponId} AND stock > 0")
     int deductStock(@Param("couponId") Long couponId);
+
+    /**
+     * 回补优惠券库存（退款时 +1）
+     */
+    @Update("UPDATE rb_coupon SET stock = stock + 1 WHERE id = #{couponId}")
+    int restoreStock(@Param("couponId") Long couponId);
 }

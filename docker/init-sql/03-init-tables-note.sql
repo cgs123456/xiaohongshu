@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS rb_note (
     address    VARCHAR(200) DEFAULT '' COMMENT '地址',
     longitude  DOUBLE       DEFAULT NULL COMMENT '经度',
     latitude   DOUBLE       DEFAULT NULL COMMENT '纬度',
+    moderation_status VARCHAR(20) DEFAULT NULL COMMENT '审核状态：NULL-放行 PENDING_REVIEW-待人工审核（信息流暂不展示）',
     `like`     INT          DEFAULT 0 COMMENT '点赞',
     collection INT          DEFAULT 0 COMMENT '收藏',
     user_id    INT          DEFAULT NULL COMMENT '发布人id',

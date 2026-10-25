@@ -1,7 +1,9 @@
 package com.itcast.service;
 
+import com.itcast.model.dto.CheckoutOrderDto;
 import com.itcast.model.dto.OrderDto;
 import com.itcast.model.pojo.Order;
+import com.itcast.model.vo.OrderVo;
 import com.itcast.result.Result;
 
 import java.util.List;
@@ -15,15 +17,29 @@ public interface OrderService {
     void processOrderMessage(OrderDto orderDto);
 
     /**
-     * 根据用户ID获取订单列表（page/pageSize 为空时返回全部，兼容现状）
-     * @param userId 用户ID
-     * @return 订单列表
+     * 处理购物车结算消息：创建订单主表（快照/地址/金额拆解）+ 明细（带事务）
      */
-    Result<List<Order>> getOrderListByUserId(Integer userId, Integer page, Integer pageSize);
+    void processCheckoutMessage(String messageId, CheckoutOrderDto dto);
 
     /**
-     * 关单公共逻辑：若订单仍处于待支付状态则取消，并回补商品库存
+     * 根据用户ID获取订单列表（含明细；page/pageSize 缺省时默认 1/20）
+     */
+    Result<List<OrderVo>> getOrderListByUserId(Integer userId, Integer page, Integer pageSize);
+
+    /**
+     * 模拟支付：校验属主与待支付状态后置为已支付并落支付流水
+     */
+    Result<Void> payOrder(Long orderId, Integer userId);
+
+    /**
+     * 关单公共逻辑：若订单仍处于待支付状态则取消，回补商品库存并退还优惠券
      * @param orderId 订单ID
      */
     void closeOrderIfDue(Long orderId);
+
+    /**
+     * 库存回补重试：从 Redis 重试队列弹出一条任务执行一次。
+     * @return 队列为空或重试成功返回 true；本次失败（已重新入队）返回 false
+     */
+    boolean retryOneStockRestore();
 }

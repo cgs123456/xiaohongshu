@@ -3,14 +3,12 @@ package com.itcast.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.google.gson.Gson;
-import com.itcast.annotation.SendMessage;
 import com.itcast.client.UserClient;
 import com.itcast.component.UserBatchLoader;
 import com.itcast.constant.ExceptionConstant;
 import com.itcast.constant.MqConstant;
 import com.itcast.constant.RedisConstant;
 import com.itcast.context.UserContext;
-import com.itcast.enums.LogType;
 import com.itcast.enums.MessageTypeEnum;
 import com.itcast.exception.NoteNoExistException;
 import com.itcast.mapper.LikeMapper;
@@ -66,7 +64,6 @@ public class LikeServiceImpl implements LikeService {
     private final Gson gson = new Gson();
 
     @Override
-    @SendMessage(type = LogType.LIKE)
     @Transactional(rollbackFor = Exception.class)
     public Result<Void> like(Long noteId) {
         Integer userId = UserContext.getUserId();
@@ -85,6 +82,10 @@ public class LikeServiceImpl implements LikeService {
             queryWrapper.eq(Like::getNoteId, noteId).eq(Like::getUserId, userId);
             int rows = likeMapper.delete(queryWrapper);
             if (rows == 0) {
+                // DB 无记录但 bit 为 true（历史提交后 setBit 失败等造成的漂移）：
+                // 必须把 bit 复位，否则用户永远走"取消"分支且 rows 恒为 0，无法重新点赞
+                runAfterCommit(() ->
+                        redisTemplate.opsForValue().setBit(RedisConstant.LIKE_SET_CACHE + noteId, userId, false));
                 return Result.success(null);
             }
 

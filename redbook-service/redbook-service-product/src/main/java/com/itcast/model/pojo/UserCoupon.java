@@ -16,8 +16,8 @@ public class UserCoupon implements Serializable {
     private Integer userId;
 
     /**
-     * 优惠券id
+     * 优惠券id（与 rb_coupon.id 同为 BIGINT 雪花 id）
      */
     @TableField("coupon_id")
-    private Integer couponId;
+    private Long couponId;
 }

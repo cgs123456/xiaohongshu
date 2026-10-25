@@ -95,6 +95,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
@@ -102,6 +103,8 @@ import LoginModal from '../components/LoginModal.vue'
 import NoteDetailModal from '../components/NoteDetailModal.vue'
 import { getNoteList, type NoteVo } from '../api/note'
 import { useToast } from '../composables/useToast'
+
+const route = useRoute()
 import { withThumb } from '../utils/image'
 
 const { showToast } = useToast()
@@ -212,7 +215,9 @@ const loadNotes = async () => {
 
   try {
     loading.value = true
-    const response = await getNoteList(page, pageSize.value)
+    // "推荐" 不带 type（后端返回全量信息流），其余分类按类型过滤
+    const categoryType = activeCategory.value === '推荐' ? undefined : activeCategory.value
+    const response = await getNoteList(page, pageSize.value, categoryType)
     const newNotes = (response.data || []).map((note, index) => convertNoteData(note, index))
 
     // 第一页时清空列表并全量重排，后续页只增量追加
@@ -238,7 +243,7 @@ const loadNotes = async () => {
     if (notes.value.length === 0) {
       loadFailed.value = true
     }
-    hasMore.value = false
+    // 失败时保留 hasMore，让用户滚动/重试可再次加载（避免一次网络抖动永久断流）
   } finally {
     loading.value = false
   }
@@ -333,6 +338,12 @@ const layoutWaterfall = () => {
 onMounted(() => {
   checkLoginStatus()
   loadNotes()
+  // 搜索页等来源跳转 /?noteId=xxx 时直接打开笔记详情
+  const noteId = route.query.noteId
+  if (typeof noteId === 'string' && noteId) {
+    selectedNoteId.value = noteId
+    showDetailModal.value = true
+  }
   window.addEventListener('scroll', handleScroll)
   window.addEventListener('note:published', handleNotePublished)
 })

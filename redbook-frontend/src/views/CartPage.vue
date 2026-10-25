@@ -30,6 +30,12 @@
         <!-- 购物车列表 -->
         <div v-else class="cart-list">
           <div v-for="item in cartItems" :key="item.id" class="cart-item">
+            <input
+              type="checkbox"
+              class="item-check"
+              :checked="selectedIds.has(item.id)"
+              @change="toggleSelect(item.id)"
+            />
             <img :src="item.productImage" :alt="item.productName" class="item-image" />
             <div class="item-info">
               <h4 class="item-name">{{ item.productName }}</h4>
@@ -59,14 +65,26 @@
             <button class="clear-btn" @click="handleClearCart">清空购物车</button>
             <div class="footer-right">
               <span class="total-label">
-                共 {{ totalCount }} 件商品，合计：
-                <span class="total-price">¥{{ totalPrice.toFixed(2) }}</span>
+                已勾选 {{ selectedCount }} 件，合计：
+                <span class="total-price">¥{{ selectedTotalPrice.toFixed(2) }}</span>
               </span>
+              <button class="checkout-btn" :disabled="selectedCount === 0" @click="openCheckout">
+                去结算
+              </button>
             </div>
           </div>
         </div>
       </div>
     </main>
+
+    <!-- 结算弹层 -->
+    <CheckoutModal
+      v-model:visible="checkoutVisible"
+      :product-ids="selectedProductIds"
+      :amount="selectedTotalPrice"
+      :item-count="selectedCount"
+      @success="handleCheckoutSuccess"
+    />
   </div>
 </template>
 
@@ -82,12 +100,48 @@ import { useToast } from '../composables/useToast'
 const router = useRouter()
 const { showToast } = useToast()
 
+import CheckoutModal from '../components/CheckoutModal.vue'
+
 const cartItems = ref<Cart[]>([])
 const loading = ref(false)
 const updatingId = ref<number | null>(null)
 
-const totalCount = computed(() => cartItems.value.reduce((sum, item) => sum + item.quantity, 0))
-const totalPrice = computed(() => cartItems.value.reduce((sum, item) => sum + item.productPrice * item.quantity, 0))
+// 勾选与结算状态（默认全选）
+const selectedIds = ref<Set<number>>(new Set())
+const checkoutVisible = ref(false)
+
+const selectedItems = computed(() => cartItems.value.filter(i => selectedIds.value.has(i.id)))
+const selectedCount = computed(() => selectedItems.value.reduce((sum, item) => sum + item.quantity, 0))
+const selectedTotalPrice = computed(() =>
+  selectedItems.value.reduce((sum, item) => sum + item.productPrice * item.quantity, 0)
+)
+const selectedProductIds = computed(() => selectedItems.value.map(i => i.productId))
+
+// 勾选/取消勾选
+const toggleSelect = (id: number) => {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  selectedIds.value = next
+}
+
+// 打开结算弹层
+const openCheckout = () => {
+  if (selectedItems.value.length === 0) {
+    showToast('请先勾选要结算的商品', 'info')
+    return
+  }
+  checkoutVisible.value = true
+}
+
+// 结算成功：清理已结算项（后端已删，本地同步）
+const handleCheckoutSuccess = () => {
+  cartItems.value = cartItems.value.filter(i => !selectedIds.value.has(i.id))
+  selectedIds.value = new Set()
+}
 
 // 加载购物车列表
 const loadCart = async () => {
@@ -95,6 +149,8 @@ const loadCart = async () => {
     loading.value = true
     const response = await getCartList()
     cartItems.value = response.data || []
+    // 默认全选
+    selectedIds.value = new Set(cartItems.value.map(i => i.id))
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : '加载购物车失败'
     showToast(errorMsg, 'error')
@@ -137,6 +193,9 @@ const removeItem = async (item: Cart) => {
 
 // 清空购物车
 const handleClearCart = async () => {
+  if (!window.confirm('确定清空购物车吗？')) {
+    return
+  }
   try {
     await clearCart()
     cartItems.value = []

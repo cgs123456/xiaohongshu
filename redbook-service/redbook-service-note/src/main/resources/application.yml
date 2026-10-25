@@ -34,36 +34,10 @@ spring:
     username: ${RABBITMQ_USERNAME:admin}
     password: ${RABBITMQ_PASSWORD:your_rabbitmq_password}
     virtual-host: /
-  # Kafka 配置
-  kafka:
-    # Kafka 集群地址
-    bootstrap-servers: ${KAFKA_ADDR:localhost:9092}
-    # 消费者相关配置
-    consumer:
-      # 消费者组 ID
-      group-id: redbook-note-consumer
-      # 消费位点策略：latest 表示从最新位置开始
-      auto-offset-reset: latest
-      # 是否自动提交 offset，开启自动提交以减少处理延迟
-      enable-auto-commit: true
-      # Key 反序列化器
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      # Value 反序列化器
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    # 生产者相关配置
-    producer:
-      # 发送失败重试次数，设置为 0 以追求最快速
-      retries: 0
-      # 应答级别：0 表示不等待 broker 确认
-      acks: 0
-      # Key 序列化器
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      # Value 序列化器
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-    # 监听容器配置
-    listener:
-      # 自动确认模式，减少处理开销
-      ack-mode: RECORD
+  elasticsearch:
+    uris: http://${ES_HOST:localhost}:9200
+    username: ${ES_USERNAME:elastic}
+    password: ${ES_PASSWORD:your_es_password}
   data:
     redis:
       host: ${REDIS_HOST:localhost}

@@ -1,7 +1,7 @@
 package com.itcast.filter;
 
-import com.auth0.jwt.exceptions.JWTDecodeException;
-import com.auth0.jwt.exceptions.TokenExpiredException;
+
+import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.itcast.enums.ResponseEnum;
 import com.itcast.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +23,22 @@ import reactor.core.publisher.Mono;
 @Component
 public class MyGlobalFilter implements GlobalFilter, Ordered {
 
+    /** 精确匹配的白名单路径（避免 startsWith 误放行 /user/sendXXX 之类端点） */
+    private static final java.util.Set<String> EXACT_WHITELIST =
+            java.util.Set.of("/user/send", "/user/verify", "/note/getNoteList");
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         // 1.获取请求和响应对象
         ServerHttpRequest request = exchange.getRequest();
         ServerHttpResponse response = exchange.getResponse();
 
-        // 2.判断是否是登录接口
+        // 2.判断是否是免认证接口
         String path = request.getURI().getPath();
         log.info("请求接口为：{}", path);
-        if (path.startsWith("/user/send") || path.startsWith("/user/verify") || path.equals("/note/getNoteList")) {
+        // WebSocket 握手放行：浏览器 WS API 无法携带自定义 header，
+        // 认证由 message 服务 WebSocketHandler 在首条消息中校验 JWT 完成
+        if (EXACT_WHITELIST.contains(path) || path.startsWith("/ws/")) {
             log.info("请求接口放行");
             return chain.filter(exchange);
         }
@@ -56,7 +62,9 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
                     .header("userId", userId)
                     .build();
             return chain.filter(exchange.mutate().request(newRequest).build());
-        } catch (TokenExpiredException | JWTDecodeException e2) {
+        } catch (JWTVerificationException e2) {
+            // 覆盖 TokenExpired / SignatureVerification / JWTDecode / InvalidClaim 等所有校验失败
+            log.warn("token 校验失败，path={}，reason={}", path, e2.getMessage());
             response.setStatusCode(HttpStatus.valueOf(ResponseEnum.UNAUTHORIZED.getCode()));
             return response.setComplete();
         }
@@ -64,6 +72,7 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return 0;
+        // 早于限流等路由过滤器执行，保证 userId 头先注入（供 userPathKeyResolver 使用）
+        return -100;
     }
 }

@@ -20,6 +20,7 @@ import java.time.Duration;
  * 默认禁用，需通过 embedding.enabled=true 开启。
  */
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "embedding.enabled", havingValue = "true")
 @Slf4j
 public class EmbeddingServiceImpl implements EmbeddingService {
 
@@ -37,9 +38,37 @@ public class EmbeddingServiceImpl implements EmbeddingService {
 
     private final Gson gson = new Gson();
 
-    private static final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    /** HttpClient 惰性持有：静态初始化失败（Windows 代理回环连接问题）会以 ExceptionInInitializerError 拖垮服务启动 */
+    private static volatile HttpClient httpClient;
+
+    private static HttpClient httpClient() {
+        HttpClient client = httpClient;
+        if (client == null) {
+            synchronized (EmbeddingServiceImpl.class) {
+                client = httpClient;
+                if (client == null) {
+                    client = HttpClient.newBuilder()
+                            .connectTimeout(Duration.ofSeconds(10))
+                            .build();
+                    httpClient = client;
+                }
+            }
+        }
+        return client;
+    }
+
+    /** 向量化专用线程池（发布链路异步发射用，守护线程不阻塞 JVM 退出） */
+    private static final java.util.concurrent.ExecutorService EMBED_EXECUTOR =
+            java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+                Thread t = new Thread(r, "note-embedding");
+                t.setDaemon(true);
+                return t;
+            });
+
+    @Override
+    public java.util.concurrent.CompletableFuture<float[]> embedAsync(String text) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> embed(text), EMBED_EXECUTOR);
+    }
 
     @Override
     public float[] embed(String text) {
@@ -62,7 +91,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
                 JsonObject resp = gson.fromJson(response.body(), JsonObject.class);

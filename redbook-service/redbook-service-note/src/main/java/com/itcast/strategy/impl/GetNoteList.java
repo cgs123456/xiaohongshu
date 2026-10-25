@@ -43,10 +43,19 @@ public class GetNoteList implements GetNotesStrategy {
 
     @Override
     public Result<List<NoteVo>> getNotes(NoteStrategyContext context) {
-        // 1.构造分页
+        // 1.构造分页与查询条件（type 为首页分类筛选；按 id 倒序保证信息流稳定有序）
         Page<Note> ipage = new Page<>(context.getPage(), context.getPageSize());
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Note> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        if (context.getType() != null && !context.getType().isBlank()) {
+            wrapper.eq(Note::getType, context.getType());
+        }
+        // 待人工审核的笔记不进信息流（此前 PENDING_REVIEW 只写不读，审核标记形同虚设）
+        wrapper.and(w -> w.isNull(Note::getModerationStatus)
+                .or().ne(Note::getModerationStatus, "PENDING_REVIEW"));
+        wrapper.orderByDesc(Note::getId);
         // 2.根据分页查询笔记
-        Page<Note> notePage = noteMapper.selectPage(ipage, null);
+        Page<Note> notePage = noteMapper.selectPage(ipage, wrapper);
         if (notePage == null) {
             return Result.success(new ArrayList<>());
         }

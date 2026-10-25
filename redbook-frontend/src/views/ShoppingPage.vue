@@ -26,7 +26,7 @@
 
       <!-- 商品网格 -->
       <div class="products-container">
-        <div v-if="loading" class="loading-container">
+        <div v-if="loading && products.length === 0" class="loading-container">
           <Icon icon="mdi:loading" class="loading-icon" width="48" />
           <p>加载中...</p>
         </div>
@@ -185,7 +185,7 @@ const loadProducts = async () => {
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : '网络错误，请稍后重试'
     showToast(errorMsg, 'error')
-    hasMore.value = false
+    // 失败时保留 hasMore，允许滚动/重试再次加载
   } finally {
     loading.value = false
   }

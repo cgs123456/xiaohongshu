@@ -1,12 +1,10 @@
 package com.itcast.service.impl;
 
-import com.itcast.annotation.SendMessage;
 import com.itcast.client.CommentClient;
 import com.itcast.client.UserClient;
 import com.itcast.constant.ExceptionConstant;
 import com.itcast.constant.RedisConstant;
 import com.itcast.context.UserContext;
-import com.itcast.enums.LogType;
 import com.itcast.exception.NoteNoExistException;
 import com.itcast.exception.UserNoExistException;
 import com.itcast.handler.NoteHandler;
@@ -71,6 +69,9 @@ public class NoteServiceImpl implements NoteService {
     private NoteMapper noteMapper;
 
     @Autowired
+    private org.springframework.data.elasticsearch.core.ElasticsearchOperations elasticsearchOperations;
+
+    @Autowired
     private NoteScanMapper noteScanMapper;
 
     @Autowired
@@ -92,7 +93,6 @@ public class NoteServiceImpl implements NoteService {
     private ThreadPoolTaskExecutor threadPoolTaskExecutor;
 
     @Override
-    @SendMessage(type = LogType.SCAN)
     public Result<NoteVo> getNote(Long noteId) throws ParseException {
         // 1.查询笔记（带缓存、互斥锁、空值占位）
         Note note = getNoteWithCache(noteId);
@@ -161,6 +161,44 @@ public class NoteServiceImpl implements NoteService {
      * 流程：设置用户ID -> 上传图片 -> 获取位置 -> 过滤标题 -> 获取笔记类型 -> 提取话题 -> 保存笔记 -> 保存笔记话题 -> 保存位置到Redis -> 保存到ES
      */
     @Override
+    public Result<List<Note>> getPendingNotes(Integer page, Integer pageSize) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Note> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Note::getModerationStatus, "PENDING_REVIEW")
+                .orderByDesc(Note::getId)
+                .last("LIMIT " + Math.min(pageSize == null ? 20 : pageSize, 50)
+                        + " OFFSET " + (long) ((page == null ? 1 : page) - 1) * (pageSize == null ? 20 : pageSize));
+        return Result.success(noteMapper.selectList(wrapper));
+    }
+
+    /** 审核处置：放行清空状态进信息流；拒绝直接删除 */
+    @Override
+    public Result<Void> reviewNote(Long noteId, boolean approve) {
+        Note note = noteMapper.selectById(noteId);
+        if (note == null) {
+            return Result.failure("笔记不存在");
+        }
+        if (approve) {
+            com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Note> update =
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+            update.eq(Note::getId, noteId).set(Note::getModerationStatus, null);
+            noteMapper.update(null, update);
+            log.info("审核放行，noteId={}", noteId);
+        } else {
+            noteMapper.deleteById(noteId);
+            // 同步清理 ES 与缓存，避免已删内容仍可检索
+            try {
+                elasticsearchOperations.delete(String.valueOf(noteId),
+                        org.springframework.data.elasticsearch.core.mapping.IndexCoordinates.of("rb_note"));
+            } catch (Exception e) {
+                log.warn("审核拒绝后清理 ES 失败（可由重建索引兜底），noteId={}", noteId, e);
+            }
+            redisTemplate.delete(RedisConstant.NOTE_DETAIL_CACHE + noteId);
+            log.info("审核拒绝并删除笔记，noteId={}", noteId);
+        }
+        return Result.success(null);
+    }
+
     public Result<Void> postNote(NoteDto dto) {
         log.info("发布笔记开始（Saga 补偿型事务）...");
 
@@ -199,7 +237,7 @@ public class NoteServiceImpl implements NoteService {
         String lockKey = RedisConstant.NOTE_DETAIL_CACHE + "lock:" + noteId;
 
         // 1.读缓存（空值占位说明笔记不存在，直接抛业务异常防穿透）
-        Object cached = redisTemplate.opsForHash().get(cacheKey, "note");
+        Object cached = redisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
             return checkAndCast(cached);
         }
@@ -210,20 +248,21 @@ public class NoteServiceImpl implements NoteService {
         if (Boolean.TRUE.equals(locked)) {
             try {
                 // 双重检查
-                cached = redisTemplate.opsForHash().get(cacheKey, "note");
+                cached = redisTemplate.opsForValue().get(cacheKey);
                 if (cached != null) {
                     return checkAndCast(cached);
                 }
                 Note dbNote = noteMapper.selectById(noteId);
                 if (dbNote == null) {
                     // 写入空值占位 60 秒，防止缓存穿透
-                    redisTemplate.opsForHash().put(cacheKey, "note", EMPTY_PLACEHOLDER);
-                    redisTemplate.expire(cacheKey, EMPTY_TTL_SECONDS, TimeUnit.SECONDS);
+                    redisTemplate.opsForValue().set(cacheKey, EMPTY_PLACEHOLDER, EMPTY_TTL_SECONDS, TimeUnit.SECONDS);
                     throw new NoteNoExistException(ExceptionConstant.NOTE_NO_EXIST);
                 }
                 // 正常缓存 TTL 300 + 随机 300 秒，防止缓存雪崩
-                redisTemplate.opsForHash().put(cacheKey, "note", dbNote);
-                redisTemplate.expire(cacheKey, CACHE_TTL_SECONDS + ThreadLocalRandom.current().nextInt((int) CACHE_TTL_RANDOM), TimeUnit.SECONDS);
+                // SET key value EX ttl 单命令原子，等价于"HSET+EXPIRE 不中断"且不经过脚本参数序列化
+                redisTemplate.opsForValue().set(cacheKey, dbNote,
+                        CACHE_TTL_SECONDS + ThreadLocalRandom.current().nextInt((int) CACHE_TTL_RANDOM),
+                        TimeUnit.SECONDS);
                 return dbNote;
             } finally {
                 // Lua 脚本比对锁值后删除，防止误删其他线程的锁
@@ -241,20 +280,26 @@ public class NoteServiceImpl implements NoteService {
                 throw new RuntimeException("等待缓存加载时线程被中断", e);
             }
             waited += 50;
-            cached = redisTemplate.opsForHash().get(cacheKey, "note");
+            cached = redisTemplate.opsForValue().get(cacheKey);
             if (cached != null) {
                 return checkAndCast(cached);
             }
         }
 
-        // 4.等待超时：直接查库兜底，结果写回缓存（不打爆 DB）
+        // 4.等待超时：直接查库兜底；不存在也要写空值占位（此前这条路径不设防，穿透可直达 DB）
         Note dbNote = noteMapper.selectById(noteId);
         if (dbNote == null) {
+            try {
+                redisTemplate.opsForValue().set(cacheKey, EMPTY_PLACEHOLDER, EMPTY_TTL_SECONDS, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                log.error("写入空值占位失败 noteId={}", noteId, e);
+            }
             throw new NoteNoExistException(ExceptionConstant.NOTE_NO_EXIST);
         }
         try {
-            redisTemplate.opsForHash().put(cacheKey, "note", dbNote);
-            redisTemplate.expire(cacheKey, CACHE_TTL_SECONDS + ThreadLocalRandom.current().nextInt((int) CACHE_TTL_RANDOM), TimeUnit.SECONDS);
+            redisTemplate.opsForValue().set(cacheKey, dbNote,
+                    CACHE_TTL_SECONDS + ThreadLocalRandom.current().nextInt((int) CACHE_TTL_RANDOM),
+                    TimeUnit.SECONDS);
         } catch (Exception e) {
             log.error("写回笔记缓存失败 noteId={}", noteId, e);
         }
@@ -298,5 +343,24 @@ public class NoteServiceImpl implements NoteService {
             log.error("获取评论数失败，降级为 0 noteId={}", noteId, e);
         }
         return 0;
+    }
+    /** 全量重建 ES 笔记索引：DB 全部笔记（含待审核状态，由搜索侧自然过滤不了 keyword 字段时以数据为准）转 NoteEs 落 ES */
+    @Override
+    public Result<Integer> reindexToEs() {
+        List<Note> notes = noteMapper.selectList(null);
+        int count = 0;
+        for (Note note : notes) {
+            try {
+                com.itcast.model.pojo.NoteEs noteEs = new com.itcast.model.pojo.NoteEs();
+                org.springframework.beans.BeanUtils.copyProperties(note, noteEs);
+                noteEs.setId(String.valueOf(note.getId()));
+                elasticsearchOperations.save(noteEs);
+                count++;
+            } catch (Exception e) {
+                log.error("reindex 失败 noteId={}", note.getId(), e);
+            }
+        }
+        log.info("ES 全量重建索引完成，共 {} 条", count);
+        return Result.success(count);
     }
 }

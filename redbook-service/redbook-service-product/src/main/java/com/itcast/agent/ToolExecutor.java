@@ -35,14 +35,23 @@ import java.util.Map;
 @Slf4j
 public class ToolExecutor {
 
-    @Autowired
+    /** 打破 ShoppingAgentService → ToolExecutor → ProductService → ShoppingAgentService 循环依赖 */
     private ProductService productService;
+
+    @org.springframework.context.annotation.Lazy
+    @Autowired
+    private void setProductService(ProductService productService) {
+        this.productService = productService;
+    }
 
     @Autowired
     private CartService cartService;
 
     @Autowired
     private CouponService couponService;
+
+    @Autowired
+    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     private final Gson gson = new Gson();
 
@@ -121,7 +130,7 @@ public class ToolExecutor {
         return fail(result.getMessage());
     }
 
-    // ============ 工具 4：立即下单（走完整库存预扣链路） ============
+    // ============ 工具 4：立即下单（走完整库存预扣链路，需用户确认） ============
     private String createOrder(Map<String, Object> args) {
         Integer productId = toInt(args.get("productId"));
         if (productId == null) {
@@ -130,6 +139,34 @@ public class ToolExecutor {
         Integer userId = UserContext.getUserId();
         if (userId == null) {
             return fail("用户未登录");
+        }
+        // 下单确认门禁：LLM 未经用户确认不得直接扣库存建订单。
+        // 首次调用 → 置 pending 标记并要求 LLM 先向用户确认；用户下一轮表态后
+        // （ShoppingAgentService 置 confirmed）才真正放行
+        String confirmedKey = com.itcast.agent.ShoppingAgentService.ORDER_CONFIRMED_KEY + userId;
+        String pendingKey = com.itcast.agent.ShoppingAgentService.ORDER_PENDING_KEY + userId;
+        boolean confirmed = false;
+        try {
+            confirmed = Boolean.TRUE.equals(redisTemplate.hasKey(confirmedKey));
+        } catch (Exception e) {
+            log.warn("读取下单确认状态失败，按未确认处理，userId={}", userId, e);
+        }
+        if (!confirmed) {
+            try {
+                redisTemplate.opsForValue().set(pendingKey, String.valueOf(productId),
+                        java.time.Duration.ofMinutes(10));
+            } catch (Exception ex) {
+                log.warn("写入下单 pending 标记失败，userId={}", userId, ex);
+            }
+            return gson.toJson(Map.of("ok", false,
+                    "message", "用户尚未确认下单：请先用自然语言向用户确认商品、数量与金额，" +
+                            "待用户在下一轮回复中明确同意后再调用 create_order"));
+        }
+        // 消费确认标记（一次性），避免同一确认被用于多次下单
+        try {
+            redisTemplate.delete(confirmedKey);
+        } catch (Exception ex) {
+            log.warn("清除下单确认标记失败，userId={}", userId, ex);
         }
         BuyDto buyDto = new BuyDto();
         buyDto.setProductId(productId);

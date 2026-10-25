@@ -16,4 +16,8 @@ public class MqConstant {
 
     public static final String UPDATE_PRODUCT_STOCK_EXCHANGE = "update.product.stock.exchange";
     public static final String UPDATE_PRODUCT_STOCK_QUEUE = "update.product.stock.queue";
+
+    /** 购物车结算下单（多商品一单，含快照/地址/优惠） */
+    public static final String CHECKOUT_ORDER_EXCHANGE = "checkout.order.exchange";
+    public static final String CHECKOUT_ORDER_QUEUE = "checkout.order.queue";
 }

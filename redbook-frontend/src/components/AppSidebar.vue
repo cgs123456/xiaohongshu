@@ -27,6 +27,14 @@
       </div>
       <div
         class="nav-item"
+        :class="{ active: currentRoute === '/orders' }"
+        @click="navigateTo('/orders')"
+      >
+        <Icon icon="mdi:file-document-outline" class="nav-icon" width="24" />
+        <span class="nav-text">订单</span>
+      </div>
+      <div
+        class="nav-item"
         :class="{ active: currentRoute === '/notifications' }"
         @click="navigateTo('/notifications')"
       >

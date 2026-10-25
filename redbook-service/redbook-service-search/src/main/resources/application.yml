@@ -32,6 +32,8 @@ spring:
           min-idle: 0
   elasticsearch:
     uris: http://${ES_HOST:localhost}:9200
+    username: ${ES_USERNAME:elastic}
+    password: ${ES_PASSWORD:your_es_password}
 # Embedding 向量化服务（用于 ES 混合检索 dense_vector 查询生成）
 # 默认禁用，需通过环境变量 EMBEDDING_ENABLED=true 开启
 embedding:

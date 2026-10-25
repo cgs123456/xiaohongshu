@@ -111,8 +111,11 @@ public class AttentionServiceImpl implements AttentionService {
 
     @Override
     public Result<List<Attention>> getAttention(Integer userId) {
+        // 关注数可达数千以上，全量返回会拖垮接口；这里取最近 500 条（此前无界）
         LambdaQueryWrapper<Attention> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Attention::getOwnId, userId);
+        queryWrapper.eq(Attention::getOwnId, userId)
+                .orderByDesc(Attention::getId)
+                .last("LIMIT 500");
         List<Attention> attentionList = attentionMapper.selectList(queryWrapper);
         // 回填 Redis Set（ATTENTION_CACHE + ownId），保证 Redis 重启/数据丢失后 isAttention 仍正确
         if (!attentionList.isEmpty()) {

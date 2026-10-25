@@ -11,7 +11,6 @@ import com.itcast.model.pojo.ExceptionMessage;
 import com.itcast.result.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -24,8 +23,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Slf4j
 public class GlobalExceptionHandle {
 
-    @Autowired
-    private KafkaTemplate<String, String> kafkaTemplate;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -47,7 +44,12 @@ public class GlobalExceptionHandle {
     public Result<String> exception(Exception e) {
         try {
             StackTraceElement[] stackTrace = e.getStackTrace();
-            StackTraceElement firstStack = stackTrace[0];
+            // JVM 参数 -XX:+OmitStackTraceInFastThrow 热路径异常会丢栈，数组可能为空导致处理器自身抛异常
+            StackTraceElement firstStack = stackTrace.length > 0 ? stackTrace[0] : null;
+            if (firstStack == null) {
+                log.error("系统异常（无堆栈信息）：", e);
+                return Result.failure("系统繁忙，请稍后重试");
+            }
             ExceptionMessage exceptionMessage
                     = ExceptionMessage.builder()
                     .className(firstStack.getClassName())
@@ -58,7 +60,8 @@ public class GlobalExceptionHandle {
             log.error("异常发生在: {}.{}({}:{})",
                     firstStack.getClassName(), firstStack.getMethodName(), firstStack.getFileName(), firstStack.getLineNumber());
             log.error("异常信息: {}", e.getMessage());
-            kafkaTemplate.send("system-exception-log", objectMapper.writeValueAsString(exceptionMessage));
+            // 行为/异常日志 Kafka 管道已下线（无消费者、broker 未部署）；结构化信息进应用日志供采集
+            log.error("结构化异常: {}", objectMapper.writeValueAsString(exceptionMessage));
         } catch (JsonProcessingException jsonProcessingException) {
             log.error("记录日志失败:{}", jsonProcessingException.getMessage());
         }

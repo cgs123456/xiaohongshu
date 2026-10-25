@@ -24,7 +24,9 @@ public class HistoryServiceImpl implements HistoryService {
             return Result.failure("用户未登录");
         }
         LambdaQueryWrapper<History> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(History::getUserId, userId);
+        queryWrapper.eq(History::getUserId, userId)
+                .orderByDesc(History::getId)
+                .last("LIMIT 50");
         List<History> historyList = historyMapper.selectList(queryWrapper);
         return Result.success(historyList);
     }

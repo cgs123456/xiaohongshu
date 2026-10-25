@@ -85,19 +85,16 @@ public class GetTopicHandler extends NoteHandler {
                 compensationData.put(dbTopic.getId(), null);
             }
 
-            // 5.逐个处理话题 id 与热度更新
+            // 5.逐个处理话题 id 与热度更新（原子自增，替代读改写避免并发丢失更新）
             for (String content : topicContents) {
                 Topic topic = existMap.get(content);
                 if (topic == null) {
                     topicIdList.add(newTopicIdMap.get(content));
                     continue;
                 }
-                // 更新的话题，记录 topicId -> oldHot（表示需要恢复 hot 值）
-                Integer oldHot = topic.getHot();
-                topic.setHot(oldHot == null ? 1 : oldHot + 1);
-                topicMapper.updateById(topic);
+                topicMapper.incrementHot(topic.getId());
                 topicIdList.add(topic.getId());
-                compensationData.put(topic.getId(), oldHot);
+                compensationData.put(topic.getId(), topic.getHot());
             }
         }
         noteDto.setTopicList(topicIdList);
@@ -121,13 +118,9 @@ public class GetTopicHandler extends NoteHandler {
                     topicMapper.deleteById(topicId);
                     log.info("补偿操作：已删除新创建的话题，topicId: {}", topicId);
                 } else {
-                    // 更新的话题，需要恢复 hot 值
-                    Topic topic = topicMapper.selectById(topicId);
-                    if (topic != null) {
-                        topic.setHot(oldHot);
-                        topicMapper.updateById(topic);
-                        log.info("补偿操作：已恢复话题 hot 值，topicId: {}, oldHot: {}", topicId, oldHot);
-                    }
+                    // 更新的话题，原子回退热度（此前读改写恢复旧值会吞掉并发其他笔记的自增）
+                    topicMapper.decrementHot(topicId);
+                    log.info("补偿操作：已回退话题 hot 值，topicId: {}", topicId);
                 }
             }
             // 清空补偿数据

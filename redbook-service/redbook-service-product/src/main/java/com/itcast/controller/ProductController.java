@@ -18,10 +18,10 @@ import java.util.List;
 public class ProductController {
 
     /**
-     * 内部接口令牌（order 服务调用 /helper/restoreStock 时需携带一致的令牌）
+     * 内部接口令牌校验（见 InternalTokenGuard：默认令牌时 helper 接口熔断）
      */
-    @Value("${internal.token:change-me-internal-token}")
-    private String internalToken;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.itcast.config.InternalTokenGuard internalTokenGuard;
 
     @Autowired
     private ProductService productService;
@@ -97,17 +97,6 @@ public class ProductController {
         public void setMessage(String message) { this.message = message; }
     }
 
-    @GetMapping("/helper/buyProduct")
-    public Result<Void> helperBuyProduct(@RequestParam Integer productId) {
-        if (productId == null) {
-            return Result.failure("商品ID不能为空");
-        }
-        BuyDto buyDto = new BuyDto();
-        buyDto.setProductId(productId);
-        buyDto.setUserId(UserContext.getUserId());
-        return productService.buyProduct(buyDto);
-    }
-
     /**
      * 库存回补接口（内部接口，供 order 服务订单超时关单后回补库存）
      * 使用内部令牌校验，令牌由配置项 internal.token 提供，调用方需保持一致
@@ -118,7 +107,7 @@ public class ProductController {
     @GetMapping("/helper/getProductById/{productId}")
     public Result<Product> helperGetProductById(@RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
                                                 @PathVariable Integer productId) {
-        if (internalToken == null || !internalToken.equals(this.internalToken)) {
+        if (!internalTokenGuard.isValid(internalToken)) {
             return Result.failure("无效的内部令牌");
         }
         Product product = productService.selectById(productId);
@@ -135,7 +124,7 @@ public class ProductController {
         if (productId == null || quantity == null || quantity <= 0) {
             return Result.failure("参数错误");
         }
-        if (internalToken == null || !internalToken.equals(this.internalToken)) {
+        if (!internalTokenGuard.isValid(internalToken)) {
             return Result.failure("无效的内部令牌");
         }
         return productService.restoreStock(productId, quantity);

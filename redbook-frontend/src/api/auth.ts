@@ -9,8 +9,30 @@ const request = axios.create({
     timeout: 15000
 })
 
-// 请求去重：key -> AbortController，相同请求进行中再次发起会取消旧请求
-const pending = new Map<string, AbortController>()
+// 请求去重：key -> 进行中的请求。相同 key 的新请求会取消旧请求；
+// 被取消请求的调用方不会挂起，而是等待最新请求完成后拿到相同结果
+interface Deferred {
+    resolve: (value: any) => void
+    reject: (reason?: any) => void
+}
+
+interface PendingEntry {
+    controller: AbortController
+    // 被取消的旧请求的调用方，随最新请求一起 settle
+    deferreds: Deferred[]
+}
+
+const pending = new Map<string, PendingEntry>()
+
+const makeDeferred = (): Deferred & { promise: Promise<any> } => {
+    let resolve!: (v: any) => void
+    let reject!: (e: any) => void
+    const promise = new Promise<any>((res, rej) => {
+        resolve = res
+        reject = rej
+    })
+    return { promise, resolve, reject }
+}
 
 interface DedupConfig extends InternalAxiosRequestConfig {
     dedupKey?: string
@@ -18,8 +40,26 @@ interface DedupConfig extends InternalAxiosRequestConfig {
 
 const generateDedupKey = (config: InternalAxiosRequestConfig): string => {
     const params = config.params ? JSON.stringify(config.params) : ''
-    const data = typeof config.data === 'string' ? config.data : ''
+    // 拦截器阶段 data 还是对象（axios 在其后才序列化），必须 stringify 才能区分不同 body
+    const data = config.data
+        ? (typeof config.data === 'string' ? config.data : JSON.stringify(config.data))
+        : ''
     return `${config.method}:${config.url}:${params}:${data}`
+}
+
+/** 让所有被取消的旧调用方随最新请求一起完成 */
+const settleFollowers = (key: string | undefined, value: any, error: any): void => {
+    if (!key) return
+    const entry = pending.get(key)
+    if (!entry) return
+    pending.delete(key)
+    for (const d of entry.deferreds) {
+        if (error) {
+            d.reject(error)
+        } else {
+            d.resolve(value)
+        }
+    }
 }
 
 // 触发全局"需要重新登录"事件
@@ -52,13 +92,16 @@ request.interceptors.request.use(
         if (!isUpload) {
             const key = generateDedupKey(config)
             const existing = pending.get(key)
-            // 相同请求进行中，取消旧请求
+            // 相同请求进行中：取消旧请求，其调用方转入新请求
             if (existing) {
-                existing.abort()
+                existing.controller.abort()
             }
-            const controller = new AbortController()
-            config.signal = controller.signal
-            pending.set(key, controller)
+            const entry: PendingEntry = {
+                controller: new AbortController(),
+                deferreds: existing ? existing.deferreds : []
+            }
+            config.signal = entry.controller.signal
+            pending.set(key, entry)
             ;(config as DedupConfig).dedupKey = key
         }
 
@@ -73,21 +116,27 @@ request.interceptors.request.use(
 request.interceptors.response.use(
     (response) => {
         const key = (response.config as DedupConfig).dedupKey
-        if (key) pending.delete(key)
-
         const res = response.data
-        // 统一业务错误处理：code !== 200 直接拒绝
+        // 统一业务错误处理：code !== 200 直接拒绝（被取消的旧调用方收到相同错误）
         if (res && typeof res === 'object' && 'code' in res && res.code !== 200) {
-            return Promise.reject(new Error(res.message || res.msg || '请求失败'))
+            const bizError = new Error(res.message || res.msg || '请求失败')
+            settleFollowers(key, null, bizError)
+            return Promise.reject(bizError)
         }
+        settleFollowers(key, res, null)
         return res
     },
     (error) => {
         const key = error?.config ? (error.config as DedupConfig).dedupKey : undefined
-        if (key) pending.delete(key)
 
-        // 请求被去重逻辑取消：静默处理，调用方无需感知
+        // 请求被去重逻辑取消：调用方挂到当前最新的同 key 请求上，等待其完成拿到相同结果
         if (axios.isCancel(error)) {
+            const entry = key ? pending.get(key) : undefined
+            if (entry) {
+                const d = makeDeferred()
+                entry.deferreds.push(d)
+                return d.promise
+            }
             return new Promise<never>(() => {})
         }
 
@@ -95,9 +144,12 @@ request.interceptors.response.use(
         if (error.response?.status === 401) {
             useUserStore().logout()
             emitAuthRequired()
-            return Promise.reject(new Error('未授权，请重新登录'))
+            const authError = new Error('未授权，请重新登录')
+            settleFollowers(key, null, authError)
+            return Promise.reject(authError)
         }
 
+        settleFollowers(key, null, error)
         return Promise.reject(error)
     }
 )

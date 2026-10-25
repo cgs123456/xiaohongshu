@@ -39,7 +39,8 @@ public class AutoTimeAspect {
         try {
             Method setTime = entity.getClass().getDeclaredMethod("setTime", String.class);
             // 4.设置值
-            setTime.invoke(entity, new SimpleDateFormat("yyyy-MM-dd").format(new Date()));
+            // 精确到秒：date-only 格式会让同日笔记无法按时间排序，且与种子数据的全格式混存
+            setTime.invoke(entity, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         } catch (Exception e) {
             log.error("发生异常",e);
         }

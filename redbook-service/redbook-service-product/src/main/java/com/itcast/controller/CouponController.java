@@ -15,6 +15,9 @@ public class CouponController {
     @Autowired
     private CouponService couponService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.itcast.config.InternalTokenGuard internalTokenGuard;
+
     @GetMapping("/getCouponsByUserId")
     public Result<List<CouponVo>> getCouponsByUserId() {
         return couponService.getCouponsByUserId();
@@ -25,13 +28,17 @@ public class CouponController {
         return couponService.useCoupon(couponId);
     }
 
-    @GetMapping("/helper/getCouponsByUserId")
-    public List<CouponVo> getCouponsByUserIdHelper() {
-        return couponService.getCouponsByUserId().getData();
-    }
-
-    @GetMapping("/helper/useCoupon")
-    public Void useCouponHelper(@RequestParam Long couponId) {
-        return couponService.useCoupon(couponId).getData();
+    /**
+     * 内部接口：退还优惠券（order 服务订单超时取消时回滚核销）
+     */
+    @PostMapping("/helper/refundCoupon")
+    public Result<Void> refundCoupon(@RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
+                                     @RequestParam("userId") Integer userId,
+                                     @RequestParam("couponId") Long couponId) {
+        if (!internalTokenGuard.isValid(internalToken)) {
+            return Result.failure("无效的内部令牌");
+        }
+        couponService.refundCoupon(couponId, userId);
+        return Result.success(null);
     }
 }

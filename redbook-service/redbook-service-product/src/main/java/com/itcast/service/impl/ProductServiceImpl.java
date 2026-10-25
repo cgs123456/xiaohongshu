@@ -143,23 +143,45 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Result<Void> postProduct(ProductDto productDto) {
-        // 1.上传商品
+        // 1.参数校验
+        if (productDto == null || productDto.getName() == null || productDto.getName().isBlank()
+                || productDto.getPrice() == null) {
+            return Result.failure("商品名称和价格不能为空");
+        }
+        // 2.上传商品（必须拷贝 DTO 字段，此前漏拷导致插入全空商品）
         Product product = new Product();
-        // 先插入商品获取 ID
+        BeanUtils.copyProperties(productDto, product);
+        product.setId(null); // 主键由数据库自增，忽略客户端传入
+        product.setUserId(UserContext.getUserId()); // 属主为当前登录用户
         productMapper.insert(product);
-        
-        // 2.上传商品属性
+
+        // 3.上传商品属性（可选）
         ProductAttribute productAttribute = productDto.getProductAttribute();
-        productAttribute.setProductId(product.getId());
-        mongoTemplate.insert(productAttribute);
+        if (productAttribute != null) {
+            productAttribute.setProductId(product.getId());
+            mongoTemplate.insert(productAttribute);
+        }
 
         return Result.success(null);
     }
 
     @Override
     public Result<Void> updateProduct(ProductDto productDto) {
+        if (productDto.getId() == null) {
+            return Result.failure("商品ID不能为空");
+        }
+        Product existing = productMapper.selectById(productDto.getId());
+        if (existing == null) {
+            return Result.failure("商品不存在");
+        }
+        // 属主校验：仅发布者可修改自己的商品
+        Integer userId = UserContext.getUserId();
+        if (!existing.getUserId().equals(userId)) {
+            return Result.failure("只能修改自己发布的商品");
+        }
         Product product = new Product();
         BeanUtils.copyProperties(productDto, product);
+        product.setUserId(existing.getUserId()); // 不允许转移属主
         productMapper.updateById(product);
         return Result.success(null);
     }
@@ -178,68 +200,62 @@ public class ProductServiceImpl implements ProductService {
 
         String key = RedisConstant.PRODUCT_STOCK_CACHE + buyDto.getProductId();
 
-        // 1.使用分布式锁做缓存预热（tryLock防止长时间阻塞）
-        RLock lock = redissonClient.getLock("buyProduct:" + buyDto.getProductId());
-        boolean locked = false;
-        try {
-            locked = lock.tryLock(3, TimeUnit.SECONDS);
-            if (!locked) {
-                log.warn("获取缓存预热锁失败，productId={}", buyDto.getProductId());
-                return Result.failure("系统繁忙，请稍后重试");
-            }
-            // 2.判断redis中是否存在库存
-            if (!redisTemplate.hasKey(key)) {
-                // 将库存预热缓存在redis中
-                Product product = productMapper.selectById(buyDto.getProductId());
-                if (product == null) {
-                    return Result.failure("商品不存在");
-                }
-                Integer stock = product.getStock();
-                redisTemplate.opsForValue().set(key, stock);
-                redisTemplate.expire(key, 60 * 60 * 24, TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("获取缓存预热锁被中断，productId={}", buyDto.getProductId(), e);
-            return Result.failure("系统繁忙，请稍后重试");
-        } catch (Exception e) {
-            log.error("缓存预热异常，productId={}", buyDto.getProductId(), e);
-            return Result.failure("系统繁忙，请稍后重试");
-        } finally {
-            if (locked) {
-                lock.unlock();
+        // 0.5 用户级请求幂等（防双击/重放）：userId+productId 5 秒去重窗口。
+        // 消息级 messageId 幂等只能防 broker 重投，防不了同一用户连发两次请求
+        if (buyDto.getUserId() != null) {
+            String requestKey = "buy:idem:" + buyDto.getUserId() + ":" + buyDto.getProductId();
+            Boolean first = redisTemplate.opsForValue().setIfAbsent(requestKey, "1", 5, TimeUnit.SECONDS);
+            if (Boolean.FALSE.equals(first)) {
+                return Result.failure("请勿重复提交，请稍后再试");
             }
         }
 
-        // 3.使用lua脚本保证判断库存数量和减库存的原子性
-        String luaScript = "local stock = redis.call('get', KEYS[1]); " +
-                "if stock == false or stock == nil then " +
-                "    return -2; " +  // 库存不存在
-                "end " +
-                "stock = tonumber(stock); " +
-                "local quantity = tonumber(ARGV[1]); " +  // ARGV[1]是要购买的数量
-                "if stock >= quantity then " +
-                "    redis.call('decrby', KEYS[1], quantity); " +
-                "    return stock - quantity; " +  // 返回剩余库存
-                "else " +
-                "    return -1; " +  // 库存不足
-                "end";
-        RedisScript<Long> script = RedisScript.of(luaScript, Long.class);
-        Long result = redisTemplate.execute(script, Collections.singletonList(key), quantity.longValue());
+        // 1&3.Redis Lua 原子扣减（含预热，与结算链路共用）
+        Long result = deductRedisStockInternal(buyDto.getProductId(), quantity);
         if (result == null || result < 0) {
             // -1库存不足 / -2库存key不存在，统一按库存不足处理
             return Result.failure("库存不足");
         }
 
-        // 4.异步更新mysql中的库存（消息携带购买数量，由消费端原子条件扣减）
-        rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", buyDto);
+        // 4&5.发送两条消息（MySQL 扣减 + 创建订单）。任一失败必须补偿 Redis 扣减；
+        //     若第一条已发出无法撤回，补发一条 restore 消息回滚 MySQL 扣减。
+        //     （进程在 Lua 之后、发送之前崩溃的窗口仍存在，完整方案需本地消息表 Outbox，
+        //      当前用同步补偿覆盖最常见的 broker 不可用场景）
+        boolean stockMsgSent = false;
+        try {
+            rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", buyDto);
+            stockMsgSent = true;
 
-        // 5.发送消息给订单服务（MessagePostProcessor设置UUID messageId，用于order服务幂等）
-        org.springframework.amqp.core.MessagePostProcessor messagePostProcessor = msg -> {
-            msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
-            return msg;
-        };
-        rabbitTemplate.convertAndSend(MqConstant.SAVE_ORDER_EXCHANGE, "", buyDto, messagePostProcessor);
+            org.springframework.amqp.core.MessagePostProcessor messagePostProcessor = msg -> {
+                msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
+                return msg;
+            };
+            rabbitTemplate.convertAndSend(MqConstant.SAVE_ORDER_EXCHANGE, "", buyDto, messagePostProcessor);
+        } catch (Exception e) {
+            log.error("下单消息发送失败，开始补偿，productId={} quantity={}",
+                    buyDto.getProductId(), quantity, e);
+            // 回补 Redis 扣减
+            try {
+                redisTemplate.opsForValue().increment(key, quantity.longValue());
+            } catch (Exception ex) {
+                log.error("CRITICAL: Redis 库存回补失败，需人工核对，key={} quantity={}", key, quantity, ex);
+            }
+            // MySQL 扣减消息已发出则补发回滚消息
+            if (stockMsgSent) {
+                try {
+                    BuyDto restoreDto = new BuyDto();
+                    restoreDto.setProductId(buyDto.getProductId());
+                    restoreDto.setQuantity(quantity);
+                    restoreDto.setUserId(buyDto.getUserId());
+                    restoreDto.setRestore(true);
+                    rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", restoreDto);
+                } catch (Exception ex) {
+                    log.error("CRITICAL: MySQL 库存补偿消息发送失败，需人工核对，productId={} quantity={}",
+                            buyDto.getProductId(), quantity, ex);
+                }
+            }
+            return Result.failure("系统繁忙，下单失败，已自动恢复库存，请稍后重试");
+        }
 
         return Result.success(null);
     }
@@ -268,6 +284,79 @@ public class ProductServiceImpl implements ProductService {
         } catch (Exception e) {
             log.error("Agent 处理失败", e);
             return Result.failure("Agent 处理失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * Redis 库存 Lua 脚本（判断库存与扣减原子执行）：
+     * 返回扣减后剩余库存；-1 库存不足；-2 库存 key 不存在
+     */
+    private static final String STOCK_DEDUCT_LUA =
+            "local stock = redis.call('get', KEYS[1]); " +
+            "if stock == false or stock == nil then " +
+            "    return -2; " +
+            "end " +
+            "stock = tonumber(stock); " +
+            "local quantity = tonumber(ARGV[1]); " +
+            "if stock >= quantity then " +
+            "    redis.call('decrby', KEYS[1], quantity); " +
+            "    return stock - quantity; " +
+            "else " +
+            "    return -1; " +
+            "end";
+
+    @Override
+    public long deductRedisStock(Integer productId, int quantity) {
+        Long result = deductRedisStockInternal(productId, quantity);
+        return result == null ? -1 : result;
+    }
+
+    /**
+     * 分布式锁预热 + Lua 原子扣减（buyProduct 与购物车结算共用）
+     */
+    private Long deductRedisStockInternal(Integer productId, int quantity) {
+        String key = RedisConstant.PRODUCT_STOCK_CACHE + productId;
+
+        // 缓存预热（tryLock 防止长时间阻塞）
+        RLock lock = redissonClient.getLock("buyProduct:" + productId);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(3, TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("获取缓存预热锁失败，productId={}", productId);
+                return -1L;
+            }
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+                Product product = productMapper.selectById(productId);
+                if (product == null) {
+                    return -2L;
+                }
+                redisTemplate.opsForValue().set(key, product.getStock());
+                redisTemplate.expire(key, 60 * 60 * 24, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("获取缓存预热锁被中断，productId={}", productId, e);
+            return -1L;
+        } catch (Exception e) {
+            log.error("缓存预热异常，productId={}", productId, e);
+            return -1L;
+        } finally {
+            if (locked) {
+                lock.unlock();
+            }
+        }
+
+        RedisScript<Long> script = RedisScript.of(STOCK_DEDUCT_LUA, Long.class);
+        return redisTemplate.execute(script, Collections.singletonList(key), (long) quantity);
+    }
+
+    @Override
+    public void restoreRedisStock(Integer productId, int quantity) {
+        try {
+            redisTemplate.opsForValue().increment(RedisConstant.PRODUCT_STOCK_CACHE + productId, quantity);
+        } catch (Exception e) {
+            log.error("CRITICAL: Redis 库存回补失败，需人工核对，productId={} quantity={}", productId, quantity, e);
         }
     }
 
@@ -303,8 +392,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Result<Void> restoreStock(Integer productId, Integer quantity) {
-        if (productId == null || quantity == null || quantity <= 0) {
+    public Result<Void> restoreStock(Integer productId, int quantity) {
+        if (productId == null || quantity <= 0) {
             return Result.failure("参数错误");
         }
         try {

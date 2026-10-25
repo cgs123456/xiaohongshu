@@ -41,6 +41,12 @@ public class CommentServiceImpl implements CommentService {
      */
     private static final String DEFAULT_PARENT_ID = "0";
 
+    /**
+     * 评论时间格式（SimpleDateFormat 非线程安全，用 ThreadLocal 复用）
+     */
+    private static final ThreadLocal<SimpleDateFormat> TIME_FORMATTER =
+            ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
+
     @Autowired
     private MongoTemplate mongoTemplate;
 
@@ -49,22 +55,44 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     public Result<Void> postComment(CommentDto commentDto) {
+        // 身份一律取网关注入的登录态，忽略请求体里的 userId（防止伪造他人身份发评论）
+        Integer currentUserId = UserContext.getUserId();
+        if (currentUserId == null) {
+            return Result.failure("用户未登录");
+        }
         Comment comment = new Comment();
         comment.setContent(commentDto.getContent());
         comment.setNoteId(commentDto.getNoteId());
         comment.setParentId(commentDto.getParentId() == null ? DEFAULT_PARENT_ID : commentDto.getParentId());
-        comment.setUserId(commentDto.getUserId() != null ? commentDto.getUserId() : UserContext.getUserId());
-        comment.setTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+        comment.setUserId(currentUserId);
+        comment.setTime(TIME_FORMATTER.get().format(new Date()));
         mongoTemplate.insert(comment);
         return Result.success(null);
     }
 
     @Override
-    public Result<List<CommentVo>> getCommentList(Long noteId) {
-        // 1.按笔记查询，按时间倒序
-        Query query = new Query(Criteria.where("noteId").is(noteId))
-                .with(Sort.by(Sort.Direction.DESC, "time"));
-        List<Comment> comments = mongoTemplate.find(query, Comment.class);
+    public Result<List<CommentVo>> getCommentList(Long noteId, Integer page, Integer pageSize) {
+        // 1.一级评论分页（此前一次拉取全部评论，热帖几万条会打爆内存与批量 RPC）
+        int p = (page == null || page < 1) ? 1 : page;
+        int s = (pageSize == null || pageSize < 1) ? 20 : Math.min(pageSize, 50);
+        Query topQuery = new Query(Criteria.where("noteId").is(noteId)
+                .and("parentId").is(DEFAULT_PARENT_ID))
+                .with(Sort.by(Sort.Direction.DESC, "time"))
+                .skip((long) (p - 1) * s)
+                .limit(s);
+        List<Comment> topOnly = mongoTemplate.find(topQuery, Comment.class);
+        if (topOnly.isEmpty()) {
+            return Result.success(Collections.emptyList());
+        }
+
+        // 2.子评论单独查询（不含其他页的一级评论，链断的回复挂回原 parentId，属其他页的楼不重复展示）
+        Query childQuery = new Query(Criteria.where("noteId").is(noteId)
+                .and("parentId").ne(DEFAULT_PARENT_ID));
+        List<Comment> children = mongoTemplate.find(childQuery, Comment.class);
+
+        List<Comment> comments = new ArrayList<>(topOnly.size() + children.size());
+        comments.addAll(topOnly);
+        comments.addAll(children);
         // 2.批量查询用户信息（一次 Feign 调用，消除循环内 RPC），失败降级为空
         List<Integer> userIds = comments.stream()
                 .map(Comment::getUserId)
@@ -113,10 +141,10 @@ public class CommentServiceImpl implements CommentService {
             vo.setCommentVoId(top.getId() == null ? null : top.getId().toHexString());
             vo.setUser(userMap.get(top.getUserId()));
             vo.setDealTime(dealTime(top.getTime()));
-            List<Comment> children = top.getId() == null ? null : groupedByRoot.get(top.getId().toHexString());
-            if (children != null && !children.isEmpty()) {
-                List<CommentVo> childVos = new ArrayList<>(children.size());
-                for (Comment child : children) {
+            List<Comment> childList = top.getId() == null ? null : groupedByRoot.get(top.getId().toHexString());
+            if (childList != null && !childList.isEmpty()) {
+                List<CommentVo> childVos = new ArrayList<>(childList.size());
+                for (Comment child : childList) {
                     CommentVo childVo = new CommentVo();
                     childVo.setComment(child);
                     childVo.setCommentVoId(child.getId() == null ? null : child.getId().toHexString());

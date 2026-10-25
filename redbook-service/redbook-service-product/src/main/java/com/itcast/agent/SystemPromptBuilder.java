@@ -38,16 +38,18 @@ public class SystemPromptBuilder {
                ```
             3. 当你已经获得足够信息可以回答用户时，用自然语言回复（不要输出 JSON）。
             4. 如果用户的请求不明确（例如"帮我买那个红色的"但没指定商品），先调用 search_products 搜索。
+            5. 重要：create_order 会真实扣减库存并创建订单。调用前必须先用自然语言向用户
+               确认商品、数量与金额，并在用户明确同意后才调用；用户拒绝或犹豫时不得下单。
             """;
 
     /**
-     * 构建完整 system prompt（工具说明 + Few-Shot 示例）
+     * 构建完整 system prompt（工具说明 + Few-Shot 示例，按用户隔离）
      */
-    public String build() {
+    public String build(Integer userId) {
         StringBuilder sb = new StringBuilder(TOOL_DESCRIPTION);
 
-        // 注入 Few-Shot 示例
-        List<String> samples = fewShotStore.getSuccessSamples(FEWSHOT_LIMIT);
+        // 注入该用户本人的 Few-Shot 示例（跨用户注入会泄露他人提问内容）
+        List<String> samples = fewShotStore.getSuccessSamples(userId, FEWSHOT_LIMIT);
         if (!samples.isEmpty()) {
             sb.append("\n\n以下是正确的工具调用示例，请参考其格式：\n");
             for (int i = 0; i < samples.size(); i++) {

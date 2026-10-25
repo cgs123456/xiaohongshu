@@ -100,7 +100,7 @@ public class GetNoteListByLocation implements GetNotesStrategy {
                 noteVo.setDistance(dealDistance(distances.get(i).getValue()));
                 resultList.add(noteVo);
             }
-            log.info("最终的结果是：{}", resultList);
+            log.info("同城笔记查询完成，本页 {} 条", resultList.size());
         }
         // 8.分页（geo 结果按距离排序，直接在内存中截取）
         int page = page(context);

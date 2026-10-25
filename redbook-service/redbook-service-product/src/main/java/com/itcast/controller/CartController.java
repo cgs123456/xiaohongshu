@@ -15,6 +15,17 @@ public class CartController {
     @Autowired
     private CartService cartService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.itcast.service.CheckoutService checkoutService;
+
+    /**
+     * 购物车结算下单（多商品一单）：收货信息 + 可选优惠券 + 选中商品（空为全部）
+     */
+    @PostMapping("/checkout")
+    public Result<String> checkout(@RequestBody com.itcast.model.dto.CheckoutDto checkoutDto) {
+        return checkoutService.checkout(checkoutDto);
+    }
+
     /**
      * 添加商品到购物车
      */

@@ -22,9 +22,16 @@ public class UploadImgHandler extends NoteHandler {
     @Override
     public void handle(NoteDto noteDto) throws IOException, InterruptedException {
         MultipartFile file = noteDto.getFile();
-        String path = ossUtil.uploadImg(file.getBytes());
-        noteDto.setImage(path);
-        log.info("===已上传图片: {}===", path);
+        try {
+            String path = ossUtil.uploadImg(file.getBytes());
+            noteDto.setImage(path);
+            log.info("===已上传图片: {}===", path);
+        } catch (Exception e) {
+            // OSS 凭证/网络不可用时降级为无图发布（前端对空图有占位兜底），
+            // 而不是让整个发布链路失败——图片是增强信息而非发布前置条件
+            log.warn("图片上传失败，降级为无图发布: {}", e.getMessage());
+            noteDto.setImage("");
+        }
     }
 
     @Override

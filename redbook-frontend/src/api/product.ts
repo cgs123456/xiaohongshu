@@ -31,10 +31,11 @@ export interface ProductVo {
 }
 
 export interface Coupon {
-    id: number
+    id: string // 后端雪花 id，用字符串避免精度丢失
     name: string
     type: string
     discount: number
+    minAmount: number // 使用门槛（订单金额需满 minAmount 才可用）
     startTime: string
     endTime: string
     stock: number
@@ -45,14 +46,13 @@ export interface CouponVo {
     isUsable: boolean
 }
 
-export interface BuyDto {
-    productId: number
-    selectAttributes: Array<{
-        label: string
-        value: string[]
-    }>
-    userId?: number
-    couponId?: number
+// 购物车结算（收货信息 + 可选优惠券；productIds 为空 = 结算购物车全部商品）
+export interface CheckoutDto {
+    receiverName: string
+    receiverPhone: string
+    address: string
+    couponId?: string
+    productIds?: number[]
 }
 
 // 获取商品列表（后端 ProductController.getProductList 期望 page / pageSize 两个 @RequestParam）
@@ -78,19 +78,9 @@ export const getRecommendProducts = () => {
     return request.get<void, ApiResponse<Product[]>>('/product/recommend')
 }
 
-// 立即购买
-export const buyProduct = (buyDto: BuyDto) => {
-    return request.post<void, ApiResponse<void>>('/product/buyProduct', buyDto)
-}
-
 // 获取用户优惠券列表
 export const getCouponsByUserId = () => {
     return request.get<void, ApiResponse<CouponVo[]>>('/product/getCouponsByUserId')
-}
-
-// 使用优惠券
-export const useCoupon = (couponId: number) => {
-    return request.post<void, ApiResponse<void>>(`/product/useCoupon/${couponId}`)
 }
 
 // AI 购物助手多轮对话（后端 AgentChatRequest{conversationId, message}，
@@ -146,4 +136,9 @@ export const removeFromCart = (cartId: number) => {
 // 清空购物车
 export const clearCart = () => {
     return request.delete<void, ApiResponse<void>>('/cart/clear')
+}
+
+// 购物车结算（下单，成功后需在 15 分钟内到订单页支付）
+export const checkoutCart = (data: CheckoutDto) => {
+    return request.post<void, ApiResponse<string>>('/cart/checkout', data)
 }

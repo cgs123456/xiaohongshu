@@ -27,6 +27,9 @@ public class ConversationStore {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
+    @Autowired
+    private org.redisson.api.RedissonClient redissonClient;
+
     private final Gson gson = new Gson();
     private static final Type MESSAGE_LIST_TYPE = new TypeToken<List<AgentMessage>>() {}.getType();
 
@@ -61,30 +64,63 @@ public class ConversationStore {
     }
 
     /**
-     * 追加一条消息并保存（自动滑动窗口截断）
+     * 追加一条消息并保存（自动滑动窗口截断）。
+     * 读改写全程持锁：同会话并发请求互相覆盖会丢消息
      */
     public void appendMessage(Integer userId, String conversationId, AgentMessage message) {
         if (userId == null || conversationId == null || conversationId.isEmpty() || message == null) {
             return;
         }
-        List<AgentMessage> history = getHistory(userId, conversationId);
-        history.add(message);
-        // 滑动窗口截断
-        if (history.size() > MAX_MESSAGES) {
-            history = new ArrayList<>(history.subList(history.size() - MAX_MESSAGES, history.size()));
+        org.redisson.api.RLock lock = redissonClient.getLock("agent:conv:lock:" + userId + ":" + conversationId);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(3, java.util.concurrent.TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("获取会话锁失败，放弃本条消息追加，conversationId={}", conversationId);
+                return;
+            }
+            List<AgentMessage> history = getHistory(userId, conversationId);
+            history.add(message);
+            trimAndSave(userId, conversationId, history);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("获取会话锁被中断，conversationId={}", conversationId, e);
+        } finally {
+            if (locked) {
+                lock.unlock();
+            }
         }
-        save(userId, conversationId, history);
     }
 
     /**
-     * 批量追加消息
+     * 批量追加消息（同样持锁，防止同会话并发覆盖丢消息）
      */
     public void appendMessages(Integer userId, String conversationId, List<AgentMessage> messages) {
         if (userId == null || conversationId == null || messages == null || messages.isEmpty()) {
             return;
         }
-        List<AgentMessage> history = getHistory(userId, conversationId);
-        history.addAll(messages);
+        org.redisson.api.RLock lock = redissonClient.getLock("agent:conv:lock:" + userId + ":" + conversationId);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(3, java.util.concurrent.TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("获取会话锁失败，放弃本批消息追加，conversationId={}", conversationId);
+                return;
+            }
+            List<AgentMessage> history = getHistory(userId, conversationId);
+            history.addAll(messages);
+            trimAndSave(userId, conversationId, history);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("获取会话锁被中断，conversationId={}", conversationId, e);
+        } finally {
+            if (locked) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private void trimAndSave(Integer userId, String conversationId, List<AgentMessage> history) {
         if (history.size() > MAX_MESSAGES) {
             history = new ArrayList<>(history.subList(history.size() - MAX_MESSAGES, history.size()));
         }

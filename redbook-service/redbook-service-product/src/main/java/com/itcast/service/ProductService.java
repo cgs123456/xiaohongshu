@@ -50,5 +50,16 @@ public interface ProductService {
     /**
      * 回补商品库存（MySQL 原子加库存 + Redis INCRBY，订单超时关单时由 order 服务调用）
      */
-    Result<Void> restoreStock(Integer productId, Integer quantity);
+    Result<Void> restoreStock(Integer productId, int quantity);
+
+    /**
+     * Redis Lua 原子扣减库存（含缓存预热）。供 buyProduct 与购物车结算共用。
+     * @return 扣减后剩余库存；-1 库存不足；-2 库存 key 不存在
+     */
+    long deductRedisStock(Integer productId, int quantity);
+
+    /**
+     * 回补 Redis 库存（结算链路部分失败时补偿扣减）
+     */
+    void restoreRedisStock(Integer productId, int quantity);
 }

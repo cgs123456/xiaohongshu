@@ -38,6 +38,7 @@ public class CouponServiceImpl implements CouponService {
         return Result.success(couponsByUserId);
     }
 
+    @Override
     public List<CouponVo> getCouponsByUserId(Integer userId) {
         // 根据用户 id 查找到用户可用的优惠券
         List<Coupon> couponsByUserId = userCouponMapper.getCouponsByUserId(userId);
@@ -54,13 +55,22 @@ public class CouponServiceImpl implements CouponService {
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 自注入代理：保证单参入口经代理调用双参方法，@Transactional 真正生效
+     * （直接 this.useCoupon(...) 自调用会绕过 AOP 代理，事务失效）
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private CouponService self;
+
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Result<Void> useCoupon(Long couponId) {
-        useCoupon(couponId, UserContext.getUserId());
+        self.useCoupon(couponId, UserContext.getUserId());
         return Result.success(null);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void useCoupon(Long couponId, Integer userId) {
         RLock lock = redissonClient.getLock("useCoupon:" + couponId);
         boolean res = false;
@@ -71,7 +81,7 @@ public class CouponServiceImpl implements CouponService {
                 throw new RuntimeException("获取优惠券锁失败，请稍后重试");
             }
             // 1.条件更新 rb_user_coupon：仅当用户持有且未使用时核销，影响行数为0表示不满足条件
-            int updated = userCouponMapper.markUsed(userId, couponId.intValue());
+            int updated = userCouponMapper.markUsed(userId, couponId);
             if (updated == 0) {
                 throw new RuntimeException("优惠券不存在、已使用或不可用");
             }
@@ -92,6 +102,21 @@ public class CouponServiceImpl implements CouponService {
                 lock.unlock();
             }
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refundCoupon(Long couponId, Integer userId) {
+        // 撤销核销标记（仅已使用的会被更新；退券重置为未使用）
+        int refunded = userCouponMapper.refundUsed(userId, couponId);
+        if (refunded == 0) {
+            // 本就未使用，无需退库存（重复退款幂等）
+            log.info("优惠券本就未使用，跳过退款，couponId={} userId={}", couponId, userId);
+            return;
+        }
+        // 回补券库存（原子的 +1，不设上限校验：退款时允许略超发由人工核对）
+        couponMapper.restoreStock(couponId);
+        log.info("优惠券退款成功，couponId={} userId={}", couponId, userId);
     }
 
     @Override

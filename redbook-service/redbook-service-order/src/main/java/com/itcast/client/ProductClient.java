@@ -33,4 +33,12 @@ public interface ProductClient {
     Result<Void> restoreStock(@RequestHeader("X-Internal-Token") String internalToken,
                               @RequestParam("productId") Integer productId,
                               @RequestParam("quantity") Integer quantity);
+
+    /**
+     * 优惠券退还（订单超时取消时回滚核销，需内部令牌）
+     */
+    @PostMapping("/product/helper/refundCoupon")
+    Result<Void> refundCoupon(@RequestHeader("X-Internal-Token") String internalToken,
+                              @RequestParam("userId") Integer userId,
+                              @RequestParam("couponId") Long couponId);
 }

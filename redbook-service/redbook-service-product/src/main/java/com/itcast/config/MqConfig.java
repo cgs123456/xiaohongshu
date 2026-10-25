@@ -54,6 +54,12 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
     }
 
     // 声明交换机
+    // 结算下单交换机（队列与死信在 order 服务侧声明）
+    @Bean
+    public org.springframework.amqp.core.DirectExchange checkoutOrderExchange() {
+        return new org.springframework.amqp.core.DirectExchange(MqConstant.CHECKOUT_ORDER_EXCHANGE);
+    }
+
     @Bean
     public DirectExchange updateStockExchange() {
         return new DirectExchange(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE);

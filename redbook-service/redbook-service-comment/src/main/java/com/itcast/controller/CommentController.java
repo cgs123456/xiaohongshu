@@ -23,8 +23,10 @@ public class CommentController {
     }
 
     @GetMapping("/getCommentList/{noteId}")
-    public Result<List<CommentVo>> getCommentList(@PathVariable Long noteId) throws ParseException {
-        return commentService.getCommentList(noteId);
+    public Result<List<CommentVo>> getCommentList(@PathVariable Long noteId,
+                                                  @RequestParam(required = false) Integer page,
+                                                  @RequestParam(required = false) Integer pageSize) throws ParseException {
+        return commentService.getCommentList(noteId, page, pageSize);
     }
 
     @GetMapping("/getCommentCount/{noteId}")

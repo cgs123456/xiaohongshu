@@ -43,10 +43,13 @@ public class GetNoteListByCollection implements GetNotesStrategy {
 
     @Override
     public Result<List<NoteVo>> getNotes(NoteStrategyContext context) {
-        // 1.获取用户收藏
+        // 1.获取用户收藏（分页，此前全量拉取）
         Integer userId = UserContext.getUserId();
+        int page = context.getPage() == null || context.getPage() < 1 ? 1 : context.getPage();
+        int size = context.getPageSize() == null || context.getPageSize() < 1 ? 20 : Math.min(context.getPageSize(), 100);
         LambdaQueryWrapper<Collection> queryWrapper
-                = new LambdaQueryWrapper<Collection>().eq(Collection::getUserId, userId);
+                = new LambdaQueryWrapper<Collection>().eq(Collection::getUserId, userId)
+                .last("LIMIT " + size + " OFFSET " + (long) (page - 1) * size);
         List<Collection> collectionList = collectionMapper.selectList(queryWrapper);
         if (collectionList.isEmpty()) {
             return Result.success(new ArrayList<>());

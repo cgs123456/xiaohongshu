@@ -25,6 +25,13 @@ spring:
           uri: lb://redbook-service-user
           predicates:
             - Path=/user/**
+        # 笔记管理端点封堵（审核队列接口，仅服务间带 INTERNAL_TOKEN 直连调用）
+        - id: redbook-service-note-admin-block
+          uri: no://op
+          predicates:
+            - Path=/note/admin/**
+          filters:
+            - SetStatus=404
         # 笔记服务路由
         - id: redbook-service-note
           uri: lb://redbook-service-note
@@ -42,6 +49,14 @@ spring:
                 redis-rate-limiter.burstCapacity: 20
                 deny-empty-key: false
                 key-resolver: "#{@ipPathKeyResolver}"
+        # 内部接口封堵：/product/helper/** 是服务间内部调用（走 Feign 直连），
+        # 绝不允许经公网网关访问（否则外部可用默认令牌任意篡改库存）
+        - id: redbook-service-product-internal-block
+          uri: no://op
+          predicates:
+            - Path=/product/helper/**
+          filters:
+            - SetStatus=404
         # 商品服务路由
         - id: redbook-service-product
           uri: lb://redbook-service-product
@@ -69,11 +84,18 @@ spring:
                 redis-rate-limiter.burstCapacity: 20
                 deny-empty-key: false
                 key-resolver: "#{@ipPathKeyResolver}"
-        # AI服务路由
+        # AI服务路由（每次调用都同步打 LLM 计费，按用户限流防刷）
         - id: redbook-service-ai
           uri: lb://redbook-service-ai
           predicates:
             - Path=/ai/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 5
+                deny-empty-key: false
+                key-resolver: "#{@userPathKeyResolver}"
         # 购物车路由（CartController 挂在 /cart 前缀下，与商品服务同进程）
         - id: redbook-service-cart
           uri: lb://redbook-service-product

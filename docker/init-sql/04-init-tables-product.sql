@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS rb_coupon (
     name       VARCHAR(100)  DEFAULT '' COMMENT '券名',
     type       VARCHAR(20)   DEFAULT '' COMMENT '类型',
     discount   DECIMAL(10,2) DEFAULT 0.00 COMMENT '优惠金额',
+    min_amount DECIMAL(10,2) DEFAULT 0.00 COMMENT '使用门槛（订单总价需满该金额，0 表示无门槛）',
     start_time DATETIME      DEFAULT NULL COMMENT '生效时间（实体为 Date）',
     end_time   DATETIME      DEFAULT NULL COMMENT '失效时间（实体为 Date）',
     stock      INT DEFAULT 0 COMMENT '库存',
@@ -66,13 +67,15 @@ CREATE TABLE IF NOT EXISTS rb_coupon (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='优惠券表';
 
 -- 对齐 redbook-service-product 的 UserCoupon 实体（@TableName("rb_user_coupon")）
--- 实体只有 user_id / coupon_id 两个字段（无主键），用联合唯一键防止重复发券
+-- coupon_id 使用 BIGINT：rb_coupon 主键为雪花 id（BIGINT），此前 INT 列存不下会溢出报错；
+-- 联合唯一键防止重复发券
 -- 冲突说明：任务要求种子数据 status=0（未使用），但 UserCoupon 实体没有 status 字段；
 -- 为满足要求补充 status 列（DEFAULT 0），MyBatis-Plus 插入不写该列时取默认值，不影响实体映射
 CREATE TABLE IF NOT EXISTS rb_user_coupon (
     user_id   INT NOT NULL COMMENT '用户id',
-    coupon_id INT NOT NULL COMMENT '优惠券id',
-    status    INT DEFAULT 0 COMMENT '使用状态（实体无此字段，仅用于种子数据）：0-未使用 1-已使用',
+    coupon_id BIGINT NOT NULL COMMENT '优惠券id（与 rb_coupon.id 同为 BIGINT）',
+    status    INT DEFAULT 0 COMMENT '使用状态：0-未使用 1-已使用',
+    use_time  DATETIME DEFAULT NULL COMMENT '核销时间（追溯用）',
     UNIQUE KEY uk_user_coupon (user_id, coupon_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户-优惠券关联表';
 

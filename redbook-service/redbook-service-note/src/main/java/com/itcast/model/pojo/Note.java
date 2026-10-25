@@ -1,5 +1,6 @@
 package com.itcast.model.pojo;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -15,9 +16,11 @@ public class Note implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 主键
+     * 主键（雪花 id：rb_note 表主键为 BIGINT 且非自增，
+     * 必须显式指定 ASSIGN_ID，不能跟随全局 id-type: auto——否则 INSERT 不带 id 会报
+     * "Field 'id' doesn't have a default value"）
      */
-    @TableId
+    @TableId(type = IdType.ASSIGN_ID)
     @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
@@ -50,6 +53,12 @@ public class Note implements Serializable {
      */
     @TableField("type")
     private String type;
+
+    /**
+     * 审核状态：NULL-放行；PENDING_REVIEW-待人工审核（信息流过滤，人工放行后置 NULL）
+     */
+    @TableField("moderation_status")
+    private String moderationStatus;
 
     /**
      * 地址

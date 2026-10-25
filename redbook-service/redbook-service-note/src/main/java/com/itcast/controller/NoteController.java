@@ -3,6 +3,7 @@ package com.itcast.controller;
 import com.itcast.model.dto.NoteDto;
 import com.itcast.model.vo.NoteVo;
 import com.itcast.result.Result;
+import com.itcast.model.pojo.Note;
 import com.itcast.service.NoteService;
 import com.itcast.strategy.NoteStrategyContext;
 import com.itcast.strategy.NoteStrategyType;
@@ -21,17 +22,70 @@ public class NoteController {
     @Autowired
     private NoteService noteService;
 
+    /** 内部管理令牌（审核队列接口用，默认值时接口禁用；与 product/order 服务 INTERNAL_TOKEN 约定一致） */
+    @org.springframework.beans.factory.annotation.Value("${internal.token:change-me-internal-token}")
+    private String internalToken;
+
+    private boolean validAdminToken(String token) {
+        return token != null && !"change-me-internal-token".equals(internalToken)
+                && java.security.MessageDigest.isEqual(
+                        token.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        internalToken.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 待人工审核笔记列表（PENDING_REVIEW，管理端点，网关已封堵外网访问）
+     */
+    @GetMapping("/admin/getPendingNotes")
+    public Result<List<Note>> getPendingNotes(
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+        if (!validAdminToken(token)) {
+            return Result.failure("无效的内部令牌");
+        }
+        return noteService.getPendingNotes(defaultPage(page), defaultPageSize(pageSize));
+    }
+
+    /**
+     * 审核处置：approve=true 放行（清空 moderation_status 进信息流）；false 拒绝（删除笔记）
+     */
+    @PostMapping("/admin/reviewNote/{noteId}")
+    public Result<Void> reviewNote(
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @PathVariable Long noteId,
+            @RequestParam boolean approve) {
+        if (!validAdminToken(token)) {
+            return Result.failure("无效的内部令牌");
+        }
+        return noteService.reviewNote(noteId, approve);
+    }
+
+    /**
+     * 全量重建 ES 笔记索引（管理端点，网关已封堵外网访问）
+     */
+    @PostMapping("/admin/reindexEs")
+    public Result<Integer> reindexEs(
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Internal-Token", required = false) String token) {
+        if (!validAdminToken(token)) {
+            return Result.failure("无效的内部令牌");
+        }
+        return noteService.reindexToEs();
+    }
+
     @GetMapping("/getNoteList")
     public Result<List<NoteVo>> getNoteList(
             @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "pageSize", required = false) Integer pageSize) {
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "type", required = false) String type) {
         // 分页参数校验（可选参数，缺省 1/20）
         page = defaultPage(page);
         pageSize = defaultPageSize(pageSize);
-        
+
         NoteStrategyContext context = NoteStrategyContext.builder()
                 .page(page)
                 .pageSize(pageSize)
+                .type((type == null || type.isBlank()) ? null : type.trim())
                 .build();
         return noteService.getNotes(NoteStrategyType.DEFAULT, context);
     }

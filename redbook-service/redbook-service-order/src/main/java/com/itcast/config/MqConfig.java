@@ -104,4 +104,45 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
                 .with(SAVE_ORDER_DEAD_LETTER_KEY);
     }
 
+    // ===== 购物车结算队列（与 save.order 相同的死信策略） =====
+
+    public static final String CHECKOUT_DEAD_LETTER_EXCHANGE = "checkout.order.dead.exchange";
+    public static final String CHECKOUT_DEAD_LETTER_KEY = "checkout.order.dead.key";
+    public static final String CHECKOUT_DEAD_LETTER_QUEUE = "checkout.order.dead.queue";
+
+    @Bean
+    public DirectExchange checkoutOrderExchange() {
+        return new DirectExchange(com.itcast.constant.MqConstant.CHECKOUT_ORDER_EXCHANGE);
+    }
+
+    @Bean
+    public Queue checkoutOrderQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", CHECKOUT_DEAD_LETTER_EXCHANGE);
+        args.put("x-dead-letter-routing-key", CHECKOUT_DEAD_LETTER_KEY);
+        return new Queue(com.itcast.constant.MqConstant.CHECKOUT_ORDER_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Binding checkoutOrderBinding() {
+        return BindingBuilder.bind(checkoutOrderQueue()).to(checkoutOrderExchange()).with("");
+    }
+
+    @Bean
+    public DirectExchange checkoutDeadLetterExchange() {
+        return new DirectExchange(CHECKOUT_DEAD_LETTER_EXCHANGE);
+    }
+
+    @Bean
+    public Queue checkoutDeadLetterQueue() {
+        return QueueBuilder.durable(CHECKOUT_DEAD_LETTER_QUEUE).build();
+    }
+
+    @Bean
+    public Binding checkoutDeadLetterBinding() {
+        return BindingBuilder.bind(checkoutDeadLetterQueue())
+                .to(checkoutDeadLetterExchange())
+                .with(CHECKOUT_DEAD_LETTER_KEY);
+    }
+
 }

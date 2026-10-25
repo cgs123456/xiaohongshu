@@ -43,10 +43,14 @@ public class GetNoteListByLike implements GetNotesStrategy {
 
     @Override
     public Result<List<NoteVo>> getNotes(NoteStrategyContext context) {
-        // 1.获取用户点赞记录
+        // 1.获取用户点赞记录（按点赞时间倒序 + 分页，此前全量拉取）
         Integer userId = UserContext.getUserId();
+        int page = context.getPage() == null || context.getPage() < 1 ? 1 : context.getPage();
+        int size = context.getPageSize() == null || context.getPageSize() < 1 ? 20 : Math.min(context.getPageSize(), 100);
         LambdaQueryWrapper<Like> queryWrapper
-                = new LambdaQueryWrapper<Like>().eq(Like::getUserId, userId);
+                = new LambdaQueryWrapper<Like>().eq(Like::getUserId, userId)
+                .orderByDesc(Like::getCreateTime)
+                .last("LIMIT " + size + " OFFSET " + (long) (page - 1) * size);
         List<Like> likeList = likeMapper.selectList(queryWrapper);
         if (likeList.isEmpty()) {
             return Result.success(new ArrayList<>());

@@ -16,6 +16,12 @@ public interface UserCouponMapper extends BaseMapper<UserCoupon> {
     /**
      * 核销用户优惠券（仅未使用的会被更新，影响行数为0表示未持有或已使用）
      */
-    @Update("UPDATE rb_user_coupon SET status = 1 WHERE user_id = #{userId} AND coupon_id = #{couponId} AND status = 0")
-    int markUsed(@Param("userId") Integer userId, @Param("couponId") Integer couponId);
+    @Update("UPDATE rb_user_coupon SET status = 1, use_time = NOW() WHERE user_id = #{userId} AND coupon_id = #{couponId} AND status = 0")
+    int markUsed(@Param("userId") Integer userId, @Param("couponId") Long couponId);
+
+    /**
+     * 退还用户优惠券（订单取消时回滚核销，仅已使用的会被更新）
+     */
+    @Update("UPDATE rb_user_coupon SET status = 0, use_time = NULL WHERE user_id = #{userId} AND coupon_id = #{couponId} AND status = 1")
+    int refundUsed(@Param("userId") Integer userId, @Param("couponId") Long couponId);
 }

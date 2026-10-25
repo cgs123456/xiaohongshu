@@ -68,6 +68,9 @@ public class CollectionServiceImpl implements CollectionService {
                     .eq(Collection::getUserId, userId);
             int rows = collectionMapper.delete(queryWrapper);
             if (rows == 0) {
+                // DB 无记录但 bit 为 true（漂移）：复位 bit，否则用户永远无法重新收藏
+                runAfterCommit(() ->
+                        redisTemplate.opsForValue().setBit(RedisConstant.COLLECTION_SET_CACHE + noteId, userId, false));
                 return Result.success(null);
             }
             // 3.原子更新收藏数并加保护，保证不会被减成负数（避免先查后改的并发丢失更新）

@@ -14,6 +14,12 @@ public interface EmbeddingService {
     float[] embed(String text);
 
     /**
+     * 异步向量化（发布链路并行发射用）：在专用线程池上执行 embed。
+     * @return future 结果（不可用/异常时完成值为 null）
+     */
+    java.util.concurrent.CompletableFuture<float[]> embedAsync(String text);
+
+    /**
      * 服务是否可用（配置已启用且 API Key 非空）。
      */
     boolean isAvailable();

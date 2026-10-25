@@ -94,11 +94,9 @@ import CreateNoteModal from './CreateNoteModal.vue'
 import LoginModal from './LoginModal.vue'
 import { getUserInfo } from '../api/auth'
 import { useUserStore } from '../stores/user'
-import { useToast } from '../composables/useToast'
 
 const router = useRouter()
 const userStore = useUserStore()
-const { showToast } = useToast()
 const showCreateModal = ref(false)
 const showLoginModal = ref(false)
 const showUserMenu = ref(false)
@@ -153,11 +151,11 @@ const goHome = () => {
   router.push('/')
 }
 
-// 搜索功能
+// 搜索功能：跳转搜索页（query 驱动，支持分享链接）
 const handleSearch = () => {
   const keyword = searchKeyword.value.trim()
   if (keyword) {
-    showToast('搜索功能开发中，敬请期待', 'info')
+    router.push({ path: '/search', query: { q: keyword } })
   }
 }
 

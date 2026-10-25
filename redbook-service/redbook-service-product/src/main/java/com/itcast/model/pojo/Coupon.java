@@ -24,6 +24,12 @@ public class Coupon implements Serializable {
 
     private BigDecimal discount;
 
+    /**
+     * 使用门槛：订单总价需满该金额，0 表示无门槛
+     */
+    @TableField("min_amount")
+    private BigDecimal minAmount;
+
     @TableField("start_time")
     private Date startTime;
 

@@ -71,7 +71,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result<User> getUserById(Integer userId) {
         log.info("根据id查询用户信息...");
-        return Result.success(userMapper.selectById(userId));
+        // 跨服务展示用途：脱敏手机号，防止经笔记列表等白名单接口批量泄露
+        return Result.success(sanitize(userMapper.selectById(userId)));
     }
 
     @Override
@@ -79,7 +80,19 @@ public class UserServiceImpl implements UserService {
         if (ids == null || ids.isEmpty()) {
             return Result.success(Collections.emptyList());
         }
-        return Result.success(userMapper.selectBatchIds(ids));
+        return Result.success(userMapper.selectBatchIds(ids).stream()
+                .map(this::sanitize)
+                .collect(java.util.stream.Collectors.toList()));
+    }
+
+    /**
+     * 抹去不应跨服务外带的敏感字段（用户本人的手机号只经 /user/getInfo 返回给自己）
+     */
+    private User sanitize(User user) {
+        if (user != null) {
+            user.setPhone(null);
+        }
+        return user;
     }
 
     @Override

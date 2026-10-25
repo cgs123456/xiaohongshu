@@ -18,6 +18,12 @@ public class HttpUtil {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    /** 常规请求超时 */
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+
+    /** LLM 类长耗时请求超时（agent 多轮编排可能较慢） */
+    private static final Duration LLM_TIMEOUT = Duration.ofSeconds(90);
+
     /**
      * get请求
      * @param url
@@ -27,7 +33,9 @@ public class HttpUtil {
      */
     public static String get(String url) throws IOException, InterruptedException {
         URI uri = URI.create(url);
-        HttpRequest request = HttpRequest.newBuilder().uri(uri).GET().build();
+        HttpRequest request = HttpRequest.newBuilder().uri(uri)
+                .timeout(DEFAULT_TIMEOUT)
+                .GET().build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             return null;
@@ -48,6 +56,7 @@ public class HttpUtil {
         String json = new Gson().toJson(data);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(uri)
+                .timeout(DEFAULT_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
@@ -72,6 +81,7 @@ public class HttpUtil {
         String json = new Gson().toJson(data);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(uri)
+                .timeout(LLM_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .header("userId", String.valueOf(userId))
                 .POST(HttpRequest.BodyPublishers.ofString(json))

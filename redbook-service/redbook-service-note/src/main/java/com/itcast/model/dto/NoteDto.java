@@ -24,4 +24,10 @@ public class NoteDto extends Note {
     private String summary;
     /** AI 生成的 3 个话题标签（transient，不存数据库，仅同步到 ES 用于搜索增强） */
     private List<String> aiTags;
+    /** AI 分类异步任务（AiEnrichmentLaunchHandler 发射、JoinHandler 有界等待，随请求生命周期销毁） */
+    private transient java.util.concurrent.CompletableFuture<String> typeFuture;
+    /** AI 摘要异步任务（同上） */
+    private transient java.util.concurrent.CompletableFuture<com.itcast.service.impl.AiEnrichmentService.SummaryResult> summaryFuture;
+    /** Embedding 向量异步任务（同上） */
+    private transient java.util.concurrent.CompletableFuture<float[]> embeddingFuture;
 }
