@@ -39,5 +39,7 @@ public class CheckoutOrderDto implements Serializable {
         private String productImage;
         private BigDecimal unitPrice;
         private Integer quantity;
+        /** 商品属性快照（"label:value; label:value"，仅单品立即购买路径携带） */
+        private String attributes;
     }
 }

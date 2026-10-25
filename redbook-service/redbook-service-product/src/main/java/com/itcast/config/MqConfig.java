@@ -65,10 +65,29 @@ public class MqConfig implements RabbitTemplate.ConfirmCallback, RabbitTemplate.
         return new DirectExchange(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE);
     }
 
-    // 声明队列
+    // 声明队列（消费失败经 DLX 进死信队列保留待人工重放——此前 requeue 无限循环会阻塞队头）
     @Bean
     public Queue updateStockQueue() {
-        return new Queue(MqConstant.UPDATE_PRODUCT_STOCK_QUEUE);
+        return QueueBuilder.durable(MqConstant.UPDATE_PRODUCT_STOCK_QUEUE)
+                .deadLetterExchange(MqConstant.UPDATE_PRODUCT_STOCK_DEAD_EXCHANGE)
+                .deadLetterRoutingKey("")
+                .build();
+    }
+
+    // 库存死信交换机/队列（重试超限的库存消息保留于此，CRITICAL 日志提示人工核对重放）
+    @Bean
+    public DirectExchange updateStockDeadExchange() {
+        return new DirectExchange(MqConstant.UPDATE_PRODUCT_STOCK_DEAD_EXCHANGE);
+    }
+
+    @Bean
+    public Queue updateStockDeadQueue() {
+        return QueueBuilder.durable(MqConstant.UPDATE_PRODUCT_STOCK_DEAD_QUEUE).build();
+    }
+
+    @Bean
+    public Binding updateStockDeadBinding() {
+        return BindingBuilder.bind(updateStockDeadQueue()).to(updateStockDeadExchange()).with("");
     }
 
     // 使用routing key将队列绑定到交换机

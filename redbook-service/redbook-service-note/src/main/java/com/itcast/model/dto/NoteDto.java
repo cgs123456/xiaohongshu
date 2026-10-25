@@ -14,10 +14,14 @@ public class NoteDto extends Note {
     private MultipartFile file;
     private List<Integer> topicList;
     /**
-     * 话题补偿数据（topicId -> oldHot，null 表示需删除新话题）。
+     * 本次发布新建的话题 ID（补偿时删除）。
+     * 显式集合取代此前 Map<topicId,oldHot> 以 null 值区分"新建/存量"的隐式约定——
+     * 存量话题 hot 为 NULL 时会被误判为新建而遭到删除。
      * 由 GetTopicHandler 写入、compensate 读取；随请求级 NoteDto 生命周期销毁，无线程残留问题
      */
-    private Map<Integer, Integer> topicCompensationData;
+    private java.util.Set<Integer> createdTopicIds;
+    /** 本次发布热度被自增的存量话题 ID（补偿时原子回退，不回写旧值以免吞掉并发自增） */
+    private java.util.Set<Integer> incrementedTopicIds;
     /** 内容审核状态：null=未审核/放行，"PENDING_REVIEW"=待人工审核，"BLOCKED"=已拦截 */
     private String moderationStatus;
     /** AI 生成的 50 字摘要（transient，不存数据库，仅同步到 ES 用于搜索增强） */

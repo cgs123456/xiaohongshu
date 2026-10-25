@@ -34,15 +34,21 @@ public class GetTopicHandler extends NoteHandler {
 
     @Override
     public void handle(NoteDto noteDto) throws IOException, InterruptedException {
-        // 记录创建的新话题ID和更新的旧话题（topicId -> oldHot），用于补偿。
+        // 记录本次新建的话题 ID（补偿时删除）与被自增的存量话题 ID（补偿时原子回退热度）。
         // 存放在请求级 NoteDto 上（而非 ThreadLocal）：成功路径随 dto 一起销毁无线程残留，
         // 失败路径 compensate 仍能取到数据完成回滚
-        Map<Integer, Integer> compensationData =
-                noteDto.getTopicCompensationData() == null
-                        ? new HashMap<>()
-                        : noteDto.getTopicCompensationData();
-        compensationData.clear();
-        noteDto.setTopicCompensationData(compensationData);
+        java.util.Set<Integer> created =
+                noteDto.getCreatedTopicIds() == null
+                        ? new java.util.HashSet<>()
+                        : noteDto.getCreatedTopicIds();
+        created.clear();
+        noteDto.setCreatedTopicIds(created);
+        java.util.Set<Integer> incremented =
+                noteDto.getIncrementedTopicIds() == null
+                        ? new java.util.HashSet<>()
+                        : noteDto.getIncrementedTopicIds();
+        incremented.clear();
+        noteDto.setIncrementedTopicIds(incremented);
 
         Matcher matcher = pattern.matcher(noteDto.getContent() == null ? "" : noteDto.getContent());
         StringBuilder sb = new StringBuilder();
@@ -81,8 +87,7 @@ public class GetTopicHandler extends NoteHandler {
             for (Topic dbTopic : newTopics) {
                 topicMapper.insert(dbTopic);
                 newTopicIdMap.put(dbTopic.getContent(), dbTopic.getId());
-                // 新创建的话题，记录 topicId -> null（表示需要删除）
-                compensationData.put(dbTopic.getId(), null);
+                created.add(dbTopic.getId());
             }
 
             // 5.逐个处理话题 id 与热度更新（原子自增，替代读改写避免并发丢失更新）
@@ -94,7 +99,7 @@ public class GetTopicHandler extends NoteHandler {
                 }
                 topicMapper.incrementHot(topic.getId());
                 topicIdList.add(topic.getId());
-                compensationData.put(topic.getId(), topic.getHot());
+                incremented.add(topic.getId());
             }
         }
         noteDto.setTopicList(topicIdList);
@@ -103,28 +108,28 @@ public class GetTopicHandler extends NoteHandler {
 
     @Override
     public void compensate(NoteDto noteDto) {
-        // 补偿：恢复话题状态
-        Map<Integer, Integer> compensationData = noteDto.getTopicCompensationData();
-        if (compensationData == null || compensationData.isEmpty()) {
+        // 补偿：新建话题删除、存量话题原子回退热度
+        java.util.Set<Integer> created = noteDto.getCreatedTopicIds();
+        java.util.Set<Integer> incremented = noteDto.getIncrementedTopicIds();
+        if ((created == null || created.isEmpty()) && (incremented == null || incremented.isEmpty())) {
             return;
         }
         try {
-            for (Map.Entry<Integer, Integer> entry : compensationData.entrySet()) {
-                Integer topicId = entry.getKey();
-                Integer oldHot = entry.getValue();
-
-                if (oldHot == null) {
-                    // 新创建的话题，需要删除
+            if (created != null) {
+                for (Integer topicId : created) {
                     topicMapper.deleteById(topicId);
                     log.info("补偿操作：已删除新创建的话题，topicId: {}", topicId);
-                } else {
-                    // 更新的话题，原子回退热度（此前读改写恢复旧值会吞掉并发其他笔记的自增）
+                }
+                created.clear();
+            }
+            if (incremented != null) {
+                for (Integer topicId : incremented) {
+                    // 原子回退热度（此前读改写恢复旧值会吞掉并发其他笔记的自增）
                     topicMapper.decrementHot(topicId);
                     log.info("补偿操作：已回退话题 hot 值，topicId: {}", topicId);
                 }
+                incremented.clear();
             }
-            // 清空补偿数据
-            compensationData.clear();
         } catch (Exception e) {
             log.error("补偿操作失败：恢复话题状态时出错", e);
         }

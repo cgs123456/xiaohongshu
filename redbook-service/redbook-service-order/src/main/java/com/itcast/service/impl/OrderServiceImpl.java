@@ -144,6 +144,7 @@ public class OrderServiceImpl implements OrderService {
                 orderItem.setProductImage(item.getProductImage());
                 orderItem.setUnitPrice(item.getUnitPrice());
                 orderItem.setQuantity(item.getQuantity() == null ? 1 : item.getQuantity());
+                orderItem.setAttributes(item.getAttributes());
                 orderItemMapper.insert(orderItem);
             }
 

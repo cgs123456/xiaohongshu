@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS rb_order_item (
     product_image VARCHAR(500)  DEFAULT '' COMMENT '商品图片快照',
     unit_price    DECIMAL(10,2) DEFAULT 0.00 COMMENT '成交单价快照',
     quantity      INT           DEFAULT 1 COMMENT '数量',
+    attributes    VARCHAR(500)  DEFAULT NULL COMMENT '商品属性快照（"label:value; ..."，单品立即购买路径携带）',
     KEY idx_order_id (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单明细表';
 

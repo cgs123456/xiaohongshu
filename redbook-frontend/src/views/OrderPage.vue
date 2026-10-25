@@ -40,6 +40,7 @@
               <img class="item-image" :src="item.productImage || defaultImage" :alt="item.productName" loading="lazy" />
               <div class="item-info">
                 <p class="item-name">{{ item.productName }}</p>
+                <p v-if="item.attributes" class="item-attrs">{{ item.attributes }}</p>
                 <p class="item-price">¥{{ Number(item.unitPrice).toFixed(2) }} × {{ item.quantity }}</p>
               </div>
             </div>
@@ -295,6 +296,12 @@ onMounted(() => {
   margin: 0 0 4px;
   font-size: 14px;
   color: #333;
+}
+
+.item-attrs {
+  margin: 2px 0;
+  font-size: 12px;
+  color: #999;
 }
 
 .item-price {

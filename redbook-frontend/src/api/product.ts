@@ -53,6 +53,8 @@ export interface CheckoutDto {
     address: string
     couponId?: string
     productIds?: number[]
+    // 商品属性选择（label -> 选中值），仅"单品立即购买"路径携带，随单快照落订单明细
+    attributes?: Record<string, string>
 }
 
 // 获取商品列表（后端 ProductController.getProductList 期望 page / pageSize 两个 @RequestParam）

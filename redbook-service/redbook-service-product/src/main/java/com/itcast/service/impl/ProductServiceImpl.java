@@ -223,14 +223,11 @@ public class ProductServiceImpl implements ProductService {
         //      当前用同步补偿覆盖最常见的 broker 不可用场景）
         boolean stockMsgSent = false;
         try {
-            rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", buyDto);
+            rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", buyDto,
+                    withMessageId());
             stockMsgSent = true;
 
-            org.springframework.amqp.core.MessagePostProcessor messagePostProcessor = msg -> {
-                msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
-                return msg;
-            };
-            rabbitTemplate.convertAndSend(MqConstant.SAVE_ORDER_EXCHANGE, "", buyDto, messagePostProcessor);
+            rabbitTemplate.convertAndSend(MqConstant.SAVE_ORDER_EXCHANGE, "", buyDto, withMessageId());
         } catch (Exception e) {
             log.error("下单消息发送失败，开始补偿，productId={} quantity={}",
                     buyDto.getProductId(), quantity, e);
@@ -248,7 +245,8 @@ public class ProductServiceImpl implements ProductService {
                     restoreDto.setQuantity(quantity);
                     restoreDto.setUserId(buyDto.getUserId());
                     restoreDto.setRestore(true);
-                    rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", restoreDto);
+                    rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", restoreDto,
+                            withMessageId());
                 } catch (Exception ex) {
                     log.error("CRITICAL: MySQL 库存补偿消息发送失败，需人工核对，productId={} quantity={}",
                             buyDto.getProductId(), quantity, ex);
@@ -258,6 +256,14 @@ public class ProductServiceImpl implements ProductService {
         }
 
         return Result.success(null);
+    }
+
+    /** 消息唯一 ID（UUID）：消费端幂等键与重试计数的依据，所有库存/订单消息必须携带 */
+    private org.springframework.amqp.core.MessagePostProcessor withMessageId() {
+        return msg -> {
+            msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
+            return msg;
+        };
     }
 
     @Override

@@ -20,22 +20,24 @@
               </div>
             </div>
 
-            <!-- 商品属性（当前购物车/结算链路不落 SKU 变体，仅展示；变体随单需 SKU 改造，见项目审查报告） -->
+            <!-- 属性选择（选中值随单快照落订单明细） -->
             <div class="attributes-section" v-if="attributes && attributes.length > 0">
-              <div 
-                v-for="(attr, index) in attributes" 
+              <div
+                v-for="(attr, index) in attributes"
                 :key="index"
                 class="attribute-group"
               >
                 <div class="attribute-label">{{ attr.label }}</div>
                 <div class="attribute-options">
-                  <span
+                  <button
                     v-for="(option, optIndex) in attr.value"
                     :key="optIndex"
-                    class="attribute-option static"
+                    class="attribute-option"
+                    :class="{ active: isAttributeSelected(index, option) }"
+                    @click="selectAttribute(index, option)"
                   >
                     {{ option }}
-                  </span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -48,13 +50,18 @@
               </div>
             </div>
 
+            <!-- 提示信息 -->
+            <div class="tip-text" v-if="attributes && attributes.length > 0 && !allAttributesSelected">
+              <Icon icon="mdi:information-outline" width="16" />
+              请选择所有商品属性
+            </div>
           </div>
 
           <div class="modal-footer">
             <button class="btn btn-cancel" @click="handleClose">取消</button>
             <button
               class="btn btn-confirm"
-              :disabled="!product || loading"
+              :disabled="!product || !allAttributesSelected || loading"
               @click="handleConfirm"
             >
               <span v-if="loading">购买中...</span>
@@ -65,19 +72,21 @@
       </div>
     </Transition>
 
-    <!-- 结算弹层（收货信息与优惠券在结算时选择） -->
+    <!-- 结算弹层（收货信息与优惠券在结算时选择；选中属性随单落订单明细） -->
     <CheckoutModal
       v-model:visible="checkoutVisible"
       :product-ids="checkoutProductIds"
       :amount="checkoutAmount"
       :item-count="1"
+      :attributes="checkoutAttributes"
       @success="handleCheckoutSuccess"
     />
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { Icon } from '@iconify/vue'
 import { addToCart, type CustomAttribute } from '../api/product'
 import CheckoutModal from './CheckoutModal.vue'
 import { useToast } from '../composables/useToast'
@@ -105,16 +114,37 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+const selectedAttributes = ref<Map<number, string>>(new Map())
 const loading = ref(false)
 const checkoutVisible = ref(false)
 const checkoutProductIds = ref<number[]>([])
 const checkoutAmount = ref(0)
+const checkoutAttributes = ref<Record<string, string>>({})
 
-// 监听弹窗打开，重置状态
+// 监听弹窗打开，重置选择
 watch(() => props.visible, (newVisible) => {
   if (newVisible) {
+    selectedAttributes.value.clear()
     checkoutAmount.value = 0
   }
+})
+
+// 选择属性
+const selectAttribute = (attrIndex: number, option: string) => {
+  selectedAttributes.value.set(attrIndex, option)
+}
+
+// 判断属性是否被选中
+const isAttributeSelected = (attrIndex: number, option: string) => {
+  return selectedAttributes.value.get(attrIndex) === option
+}
+
+// 检查是否所有属性都已选择
+const allAttributesSelected = computed(() => {
+  if (!props.attributes || props.attributes.length === 0) {
+    return true
+  }
+  return selectedAttributes.value.size === props.attributes.length
 })
 
 // 关闭弹窗
@@ -124,13 +154,24 @@ const handleClose = () => {
 
 // 确认购买：加入购物车后打开结算弹层（收货信息/优惠券/价格门槛校验统一在结算链路处理）
 const handleConfirm = async () => {
-  if (!props.product) return
+  if (!props.product || !allAttributesSelected.value) return
 
   try {
     loading.value = true
     await addToCart(props.product.id, 1)
     checkoutProductIds.value = [props.product.id]
     checkoutAmount.value = props.product.price
+    // 选中属性（attrIndex -> option）转为 label -> option 随结算落单
+    const attrMap: Record<string, string> = {}
+    if (props.attributes) {
+      props.attributes.forEach((attr, index) => {
+        const selected = selectedAttributes.value.get(index)
+        if (selected) {
+          attrMap[attr.label] = selected
+        }
+      })
+    }
+    checkoutAttributes.value = attrMap
     checkoutVisible.value = true
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : '加购失败，请稍后重试'
@@ -263,7 +304,7 @@ const handleCheckoutSuccess = () => {
   gap: 10px;
 }
 
-.attribute-option.static {
+.attribute-option {
   padding: 8px 20px;
   border: 1px solid #ddd;
   background: white;
@@ -272,6 +313,24 @@ const handleCheckoutSuccess = () => {
   color: #666;
   cursor: pointer;
   transition: all 0.2s;
+}
+.attribute-option:hover {
+  border-color: #ff2442;
+  color: #ff2442;
+}
+
+.attribute-option.active {
+  border-color: #ff2442;
+  background: #fff5f5;
+  color: #ff2442;
+}
+
+.tip-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #ff9800;
 }
 
 

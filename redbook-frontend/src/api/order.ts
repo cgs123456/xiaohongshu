@@ -27,6 +27,8 @@ export interface OrderItem {
     productImage?: string
     unitPrice: number
     quantity: number
+    // 商品属性快照（"label:value; ..."，单品立即购买路径携带）
+    attributes?: string
 }
 
 export interface OrderVo {

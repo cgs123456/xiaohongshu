@@ -57,6 +57,8 @@ const props = defineProps<{
   amount: number
   // 结算商品总件数
   itemCount: number
+  // 商品属性选择（label -> 选中值），仅单品立即购买路径传入，随单落订单明细
+  attributes?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -82,7 +84,10 @@ const handleSubmit = async () => {
 
   try {
     submitting.value = true
-    const response = await checkoutCart({ ...payload, productIds: props.productIds })
+    const attrs = props.attributes && Object.keys(props.attributes).length > 0
+      ? props.attributes
+      : undefined
+    const response = await checkoutCart({ ...payload, productIds: props.productIds, attributes: attrs })
     successMessage.value = response.data || '下单成功，请在 15 分钟内完成支付'
     showToast(successMessage.value, 'success')
     emit('success')

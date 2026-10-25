@@ -91,6 +91,11 @@ public class CheckoutServiceImpl implements CheckoutService {
         List<CheckoutOrderDto.CheckoutItem> items = new ArrayList<>();
         List<int[]> deducted = new ArrayList<>(); // {productId, quantity} 已扣成功的，用于回补
         BigDecimal total = BigDecimal.ZERO;
+        // 商品属性快照：仅单品立即购买路径传入（BuyModal），拼为 "label:value; ..." 挂到明细
+        String attributesText = dto.getAttributes() == null || dto.getAttributes().isEmpty() ? null
+                : dto.getAttributes().entrySet().stream()
+                        .map(e -> e.getKey() + ":" + e.getValue())
+                        .collect(java.util.stream.Collectors.joining("; "));
         for (Cart cart : carts) {
             int quantity = cart.getQuantity() == null || cart.getQuantity() < 1 ? 1 : cart.getQuantity();
             Product product = productService.selectById(cart.getProductId());
@@ -111,6 +116,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             item.setProductImage(product.getImage());
             item.setUnitPrice(product.getPrice()); // 以 DB 当前价为快照（购物车里的价格可能过期）
             item.setQuantity(quantity);
+            item.setAttributes(attributesText);
             items.add(item);
             total = total.add(product.getPrice().multiply(BigDecimal.valueOf(quantity)));
         }
@@ -166,7 +172,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                 stockDto.setProductId(item.getProductId());
                 stockDto.setQuantity(item.getQuantity());
                 stockDto.setUserId(userId);
-                rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", stockDto);
+                rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", stockDto,
+                        msg -> {
+                            msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
+                            return msg;
+                        });
                 anyStockMsgSent = true;
             }
             MessagePostProcessor mpp = msg -> {
@@ -187,7 +197,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                         restoreDto.setQuantity(item.getQuantity());
                         restoreDto.setUserId(userId);
                         restoreDto.setRestore(true);
-                        rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", restoreDto);
+                        rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", restoreDto,
+                                msg -> {
+                                    msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
+                                    return msg;
+                                });
                     } catch (Exception ex) {
                         log.error("CRITICAL: 结算库存补偿消息发送失败，需人工核对，productId={}",
                                 item.getProductId(), ex);

@@ -24,4 +24,10 @@ public class CheckoutDto {
 
     /** 只结算指定商品（购物车项的 productId 集合）；为空表示结算全部购物车 */
     private List<Integer> productIds;
+
+    /**
+     * 商品属性选择（label -> 选中值），仅"单品立即购买"路径使用（BuyModal 单商品结算）；
+     * 购物车结算（多商品）不传。随单快照落 rb_order_item.attributes，不做 SKU 级库存区分
+     */
+    private java.util.Map<String, String> attributes;
 }
