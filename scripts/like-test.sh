@@ -6,7 +6,7 @@ source .env
 GW=http://localhost:10010
 
 # real phone digits extracted at runtime from e2e script (avoid placeholder leakage)
-PHONE=$(grep -oE '"phone":"[0-9]+"' scripts/e2e-test.sh | head -1 | grep -oE '[0-9]+')
+PHONE="${E2E_PHONE:?set E2E_PHONE in .env}"
 if [ -z "$PHONE" ]; then echo "no phone found"; exit 1; fi
 
 get_code() { docker exec redbook-redis sh -c "redis-cli -a '$REDIS_PASSWORD' --no-auth-warning GET redbook:user:phone_code:$PHONE"; }

@@ -35,5 +35,5 @@ public class Attention implements Serializable {
      * 关注时间
      */
     @TableField("time")
-    private String time;
+    private java.time.LocalDateTime time;
 }

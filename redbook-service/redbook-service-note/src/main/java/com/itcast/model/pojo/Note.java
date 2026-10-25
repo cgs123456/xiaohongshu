@@ -46,7 +46,7 @@ public class Note implements Serializable {
      * 发布时间
      */
     @TableField("time")
-    private String time;
+    private java.time.LocalDateTime time;
 
     /**
      * 类型

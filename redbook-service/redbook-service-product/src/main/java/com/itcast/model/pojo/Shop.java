@@ -35,7 +35,7 @@ public class Shop implements Serializable {
      * 成立时间
      */
     @TableField("time")
-    private String time;
+    private java.time.LocalDateTime time;
 
     /**
      * 粉丝

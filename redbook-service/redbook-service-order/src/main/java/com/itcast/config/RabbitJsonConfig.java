@@ -14,7 +14,9 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitJsonConfig {
 
     @Bean
-    public MessageConverter jacksonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+    public MessageConverter jacksonMessageConverter(org.springframework.http.converter.json.Jackson2ObjectMapperBuilder builder) {
+        // Spring 定制 ObjectMapper（含 JacksonTimeFormatConfig 的 LocalDateTime 支持）：
+        // 消息体含 java.time 字段（如 Attention MQ）时默认自建 ObjectMapper 会序列化失败
+        return new Jackson2JsonMessageConverter(builder.build());
     }
 }

@@ -60,7 +60,7 @@ public class Product implements Serializable {
      * 发布时间
      */
     @TableField("time")
-    private String time;
+    private java.time.LocalDateTime time;
 
     /**
      * 销量

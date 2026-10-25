@@ -2,7 +2,6 @@ package com.itcast.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.google.gson.Gson;
 import com.itcast.client.UserClient;
 import com.itcast.component.UserBatchLoader;
 import com.itcast.constant.ExceptionConstant;
@@ -61,7 +60,10 @@ public class LikeServiceImpl implements LikeService {
     @Autowired
     private UserBatchLoader userBatchLoader;
 
-    private final Gson gson = new Gson();
+    /** 通知消息序列化用 Spring ObjectMapper：实体 time 已是 LocalDateTime，Gson 无 JSR310 支持会输出嵌套对象 */
+    @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -143,7 +145,12 @@ public class LikeServiceImpl implements LikeService {
                     likeMessage.setNoticeId(finalNote.getUserId());
                     likeMessage.setObj(LikeVo.builder().like(savedLike).note(finalNote)
                             .user(userClient.getUserById(savedLike.getUserId()).getData()).build());
-                    rabbitTemplate.convertAndSend(MqConstant.MESSAGE_NOTICE_EXCHANGE, MqConstant.LIKE_KEY, gson.toJson(likeMessage));
+                    try {
+                        rabbitTemplate.convertAndSend(MqConstant.MESSAGE_NOTICE_EXCHANGE, MqConstant.LIKE_KEY,
+                                objectMapper.writeValueAsString(likeMessage));
+                    } catch (com.fasterxml.jackson.core.JsonProcessingException jpe) {
+                        log.error("点赞通知序列化失败", jpe);
+                    }
                 } catch (Exception e) {
                     log.error("点赞消息发送失败 noteId={}, userId={}", noteId, userId, e);
                 }

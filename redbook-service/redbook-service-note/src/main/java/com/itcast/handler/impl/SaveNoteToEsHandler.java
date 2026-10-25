@@ -29,6 +29,11 @@ public class SaveNoteToEsHandler extends NoteHandler {
         if (noteDto.getId() != null) {
             noteEs.setId(String.valueOf(noteDto.getId()));
         }
+        // Note.time 已是 LocalDateTime，ES 文档模型保持字符串（BeanUtils 类型不兼容会静默跳过）
+        if (noteDto.getTime() != null) {
+            noteEs.setTime(noteDto.getTime()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        }
 
         // Embedding 向量：LaunchHandler 已并行发射，这里有界等待（8s）；超时降级为无向量写入，
         // 任务完成后再后台补写 ES（此前同步调用最长阻塞发布 15s）

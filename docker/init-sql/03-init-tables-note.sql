@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS rb_note (
     title      VARCHAR(100) DEFAULT '' COMMENT '标题',
     content    TEXT         COMMENT '内容',
     image      VARCHAR(1000) DEFAULT '' COMMENT '图片',
-    time       VARCHAR(50)  DEFAULT '' COMMENT '发布时间（实体为 String）',
+    time       DATETIME     DEFAULT NULL COMMENT '发布时间（实体为 LocalDateTime）',
     type       VARCHAR(50)  DEFAULT '' COMMENT '类型',
     address    VARCHAR(200) DEFAULT '' COMMENT '地址',
     longitude  DOUBLE       DEFAULT NULL COMMENT '经度',
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS rb_collection (
 CREATE TABLE IF NOT EXISTS rb_note_browse (
     note_id BIGINT      NOT NULL COMMENT '笔记id',
     user_id INT         NOT NULL COMMENT '用户id',
-    time    VARCHAR(50) DEFAULT '' COMMENT '浏览时间（实体为 String）',
+    time    DATETIME    DEFAULT NULL COMMENT '浏览时间（实体为 LocalDateTime）',
     UNIQUE KEY uk_user_note (user_id, note_id),
     KEY idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='笔记浏览记录表';

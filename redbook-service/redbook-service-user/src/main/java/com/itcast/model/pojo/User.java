@@ -84,5 +84,5 @@ public class User implements Serializable {
      * 注册时间
      */
     @TableField("time")
-    private String time;
+    private java.time.LocalDateTime time;
 }

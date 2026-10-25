@@ -27,5 +27,5 @@ public class NoteBrowse implements Serializable {
      * 浏览时间
      */
     @TableField("time")
-    private String time;
+    private java.time.LocalDateTime time;
 }

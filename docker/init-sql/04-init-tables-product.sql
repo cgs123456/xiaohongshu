@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS rb_shop (
     id      INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     name    VARCHAR(100) DEFAULT '' COMMENT '店铺名称',
     image   VARCHAR(500) DEFAULT '' COMMENT '头像',
-    time    VARCHAR(50)  DEFAULT '' COMMENT '成立时间（实体为 String）',
+    time    DATETIME     DEFAULT NULL COMMENT '成立时间（实体为 LocalDateTime）',
     fans    INT DEFAULT 0 COMMENT '粉丝',
     sales   INT DEFAULT 0 COMMENT '销量',
     user_id INT DEFAULT NULL COMMENT '用户id'
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS rb_product (
     brand       VARCHAR(50)   DEFAULT '' COMMENT '商品品牌',
     price       DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '商品价格',
     image       VARCHAR(500)  DEFAULT '' COMMENT '商品图片',
-    time        VARCHAR(50)   DEFAULT '' COMMENT '发布时间（实体为 String）',
+    time        DATETIME     DEFAULT NULL COMMENT '发布时间（实体为 LocalDateTime）',
     sales       INT DEFAULT 0 COMMENT '销量',
     user_id     INT DEFAULT NULL COMMENT '用户id',
     shop_id     INT DEFAULT NULL COMMENT '店铺id',

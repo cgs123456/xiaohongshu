@@ -87,7 +87,7 @@ public class AttentionServiceImpl implements AttentionService {
             Attention attention = new Attention();
             attention.setOwnId(ownId);
             attention.setOtherId(otherId);
-            attention.setTime(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new java.util.Date()));
+            attention.setTime(java.time.LocalDateTime.now());
             try {
                 attentionMapper.insert(attention);
             } catch (DuplicateKeyException e) {

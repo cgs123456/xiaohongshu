@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS rb_user (
     identity  VARCHAR(50)  DEFAULT '' COMMENT '身份',
     school    VARCHAR(100) DEFAULT '' COMMENT '学校',
     signature VARCHAR(200) DEFAULT '' COMMENT '个性签名',
-    time      VARCHAR(50)  DEFAULT '' COMMENT '注册时间（实体为 String）',
+    time      DATETIME     DEFAULT NULL COMMENT '注册时间（实体为 LocalDateTime）',
     UNIQUE KEY uk_phone (phone),
     UNIQUE KEY uk_number (number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS rb_attention (
     id       INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     other_id INT          NOT NULL COMMENT '被关注者id',
     own_id   INT          NOT NULL COMMENT '关注者id',
-    time     VARCHAR(50)  DEFAULT '' COMMENT '关注时间（实体为 String）',
+    time     DATETIME     DEFAULT NULL COMMENT '关注时间（实体为 LocalDateTime）',
     UNIQUE KEY uk_own_other (own_id, other_id),
     KEY idx_other_id (other_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='关注表';

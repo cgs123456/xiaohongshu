@@ -106,12 +106,16 @@ public class NoteServiceImpl implements NoteService {
             throw new UserNoExistException(ExceptionConstant.USER_NO_EXIST);
         }
 
-        // 3.处理时间字符串
-        int days = DiffDayUtil.diffDays(
-                new SimpleDateFormat("yyyy-MM-dd").parse(note.getTime()), new Date());
-        String dealTime = DealTimeUtil.dealTime(days);
-        if (StringUtils.isBlank(dealTime)) {
-            dealTime = note.getTime();
+        // 3.相对时间展示（LocalDateTime -> Date 仅在此处转换，DiffDayUtil 保持不动）
+        String dealTime = "";
+        if (note.getTime() != null) {
+            int days = DiffDayUtil.diffDays(
+                    java.sql.Timestamp.valueOf(note.getTime()), new Date());
+            dealTime = DealTimeUtil.dealTime(days);
+            if (StringUtils.isBlank(dealTime)) {
+                dealTime = note.getTime()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
         }
 
         // 4.获取评论数，Feign 调用失败降级为 0 而不是抛错
@@ -364,6 +368,10 @@ public class NoteServiceImpl implements NoteService {
                 com.itcast.model.pojo.NoteEs noteEs = new com.itcast.model.pojo.NoteEs();
                 org.springframework.beans.BeanUtils.copyProperties(note, noteEs);
                 noteEs.setId(String.valueOf(note.getId()));
+                if (note.getTime() != null) {
+                    noteEs.setTime(note.getTime()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                }
                 elasticsearchOperations.save(noteEs);
                 count++;
             } catch (Exception e) {
