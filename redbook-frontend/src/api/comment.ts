@@ -4,7 +4,6 @@ import type { ApiResponse } from './types'
 export interface CommentDto {
     noteId: string
     content: string
-    userId?: number
     parentId?: string
 }
 

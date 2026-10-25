@@ -5,7 +5,9 @@ import { useUserStore } from '../stores/user'
 
 // 创建 axios 实例
 const request = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+    // 相对路径兜底：dev 由 .env.development 的 /api 走 vite 代理，生产由 .env.production 指定；
+    // 此前默认 http://localhost:8080 是 user 服务端口而非网关，未设 env 时会全部打错目标
+    baseURL: import.meta.env.VITE_API_BASE_URL || '',
     timeout: 15000
 })
 

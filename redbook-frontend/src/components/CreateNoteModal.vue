@@ -384,11 +384,6 @@ const handlePublish = async () => {
     formDataToSend.append('content', formData.value.content)
     formDataToSend.append('longitude', '0')
     formDataToSend.append('latitude', '0')
-    
-    // 添加话题
-    selectedTopics.value.forEach(topic => {
-      formDataToSend.append('topics', topic)
-    })
 
     // 调用发布接口
     const result = await postNote(formDataToSend)
