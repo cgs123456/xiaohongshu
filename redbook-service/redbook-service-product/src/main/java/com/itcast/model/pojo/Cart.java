@@ -32,6 +32,10 @@ public class Cart implements Serializable {
      */
     @TableField("product_id")
     private Integer productId;
+    /** 规格 id（库存扣减口径，加购时由 attributes 解析；同商品不同规格各占一行） */
+    private Integer skuId;
+    /** 规格快照（"颜色:黑色; 尺码:XL"，默认规格为空串） */
+    private String attributes;
 
     /**
      * 商品名称

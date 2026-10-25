@@ -92,6 +92,9 @@ public class NoteServiceImpl implements NoteService {
     @Autowired
     private ThreadPoolTaskExecutor threadPoolTaskExecutor;
 
+    @Autowired
+    private FeedFanoutService feedFanoutService;
+
     @Override
     public Result<NoteVo> getNote(Long noteId) throws ParseException {
         // 1.查询笔记（带缓存、互斥锁、空值占位）
@@ -212,6 +215,13 @@ public class NoteServiceImpl implements NoteService {
             firstHandler.handleWithCompensation(dto, iterator);
 
             log.info("笔记发布成功，noteId: {}", dto.getId());
+            // 关注流扇出（推拉结合推侧）：异步推送到作者与粉丝收件箱；失败有读侧拉取兜底。
+            // 注意：PENDING_REVIEW 笔记不扇出——放行（reviewNote）时机无 authorId 快照可推，且审核中内容不应进收件箱
+            if (dto.getModerationStatus() == null && dto.getId() != null) {
+                final Long fanoutNoteId = dto.getId();
+                final Integer authorId = dto.getUserId();
+                threadPoolTaskExecutor.execute(() -> feedFanoutService.fanout(fanoutNoteId, authorId));
+            }
             return Result.success(null);
         } catch (Exception e) {
             // 区分业务异常：审核拦截等业务异常把 message 透传给前端，其余异常返回统一失败文案

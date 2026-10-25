@@ -122,8 +122,8 @@ public class ToolExecutor {
         if (userId == null) {
             return fail("用户未登录");
         }
-        // Agent 加入购物车固定数量为 1（attributes 暂不入库，仅作为上下文信息）
-        Result<Void> result = cartService.addToCart(productId, 1);
+        // Agent 加购固定数量 1、无规格选择（走商品默认 SKU）
+        Result<Integer> result = cartService.addToCart(productId, 1, null);
         if (result.getCode() == 200) {
             return ok("已加入购物车", null);
         }

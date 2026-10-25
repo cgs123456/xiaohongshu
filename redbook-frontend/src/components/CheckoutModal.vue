@@ -51,8 +51,8 @@ import { useToast } from '../composables/useToast'
 
 const props = defineProps<{
   visible: boolean
-  // 结算的商品 id 列表
-  productIds: number[]
+  // 结算的规格 id 列表（同商品不同规格独立行）
+  skuIds: number[]
   // 结算金额（元），用于券门槛判断与摘要展示
   amount: number
   // 结算商品总件数
@@ -87,7 +87,7 @@ const handleSubmit = async () => {
     const attrs = props.attributes && Object.keys(props.attributes).length > 0
       ? props.attributes
       : undefined
-    const response = await checkoutCart({ ...payload, productIds: props.productIds, attributes: attrs })
+    const response = await checkoutCart({ ...payload, skuIds: props.skuIds, attributes: attrs })
     successMessage.value = response.data || '下单成功，请在 15 分钟内完成支付'
     showToast(successMessage.value, 'success')
     emit('success')

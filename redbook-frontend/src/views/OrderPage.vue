@@ -170,11 +170,17 @@ const retryLoad = () => {
   loadOrders()
 }
 
-// 模拟支付
+// 发起支付：同步渠道（模拟）直接完成；跳转渠道返回支付 URL 由浏览器跳转
 const handlePay = async (orderId: string) => {
   try {
     payingId.value = orderId
-    await payOrder(orderId)
+    const resp = await payOrder(orderId)
+    const payUrl = resp?.data
+    if (payUrl) {
+      window.open(payUrl, '_blank')
+      showToast('已跳转支付页面，完成后请刷新查看', 'info')
+      return
+    }
     showToast('支付成功', 'success')
     // 刷新当前订单状态（整页重置到第一页，保持简单）
     currentPage.value = 1

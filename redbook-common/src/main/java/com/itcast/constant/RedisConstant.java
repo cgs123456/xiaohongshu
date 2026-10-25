@@ -10,6 +10,10 @@ public class RedisConstant {
     public static final String COLLECTION_SET_CACHE = "redbook:note:collection_set_cache:";
     public static final String USER_BLOOM_FILTER = "redbook:note:user_bloom_filter:";
     public static final String PRODUCT_STOCK_CACHE = "redbook:product:stock:cache:";
+    /** SKU 级库存缓存 key（库存分规格后的唯一扣减口径），完整 key: 前缀 + skuId */
+    public static final String PRODUCT_SKU_STOCK_CACHE = "redbook:product:sku_stock:cache:";
+    /** 关注流收件箱（推拉结合推侧），完整 key: 前缀 + userId，List 结构存 noteId */
+    public static final String FEED_INBOX = "redbook:note:feed_inbox:";
 
     // ===== Shopping Agent 相关 =====
     /** 多轮对话存储前缀，完整 key: agent:conversation:{conversationId} */

@@ -33,6 +33,8 @@ public class Payment {
 
     @TableField("pay_method")
     private String payMethod;
+    /** 渠道交易号（网关回调对账用） */
+    private String tradeNo;
 
     /** 1-成功 0-失败 */
     private Integer status;

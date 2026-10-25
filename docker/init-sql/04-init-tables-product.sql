@@ -39,13 +39,15 @@ CREATE TABLE IF NOT EXISTS rb_cart (
     id            INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     user_id       INT           NOT NULL COMMENT '用户ID',
     product_id    INT           NOT NULL COMMENT '商品ID',
+    sku_id        INT           NOT NULL COMMENT '规格ID（库存扣减口径，加购时解析）',
+    attributes    VARCHAR(500)  DEFAULT '' COMMENT '规格快照（"颜色:黑色; 尺码:XL"，默认规格为空串）',
     product_name  VARCHAR(100)  DEFAULT '' COMMENT '商品名称',
     product_image VARCHAR(500)  DEFAULT '' COMMENT '商品图片',
     product_price DECIMAL(10,2) DEFAULT 0.00 COMMENT '商品价格',
     quantity      INT DEFAULT 1 COMMENT '数量',
     create_time   DATETIME DEFAULT NULL COMMENT '创建时间（实体为 LocalDateTime）',
     update_time   DATETIME DEFAULT NULL COMMENT '更新时间（实体为 LocalDateTime）',
-    UNIQUE KEY uk_user_product (user_id, product_id)
+    UNIQUE KEY uk_user_sku (user_id, sku_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='购物车表';
 
 -- 对齐 redbook-service-product 的 Coupon 实体（@TableName("rb_coupon")）
@@ -84,7 +86,7 @@ CREATE TABLE IF NOT EXISTS rb_user_coupon (
 CREATE TABLE IF NOT EXISTS rb_product_browse (
     product_id INT NOT NULL COMMENT '产品id',
     user_id    INT NOT NULL COMMENT '用户id',
-    UNIQUE KEY uk_user_product (user_id, product_id)
+    UNIQUE KEY uk_user_sku (user_id, sku_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品浏览记录表';
 
 -- 种子数据：店铺（归属用户 1）
@@ -104,6 +106,40 @@ INSERT IGNORE INTO rb_product (id, name, type, description, brand, price, image,
 (9,  '北欧简约陶瓷香薰灯',   '家居', '暖光助眠，卧室氛围感拉满', '宜家', 159.00,  'https://picsum.photos/seed/product9/600/600', '2026-06-09 18:00:00', 2400, 1, 1, 350),
 (10, '全棉四件套床品套件',   '家居', 'A 类母婴级面料，裸睡不扎', '水星家纺', 429.00, 'https://picsum.photos/seed/product10/600/600', '2026-06-10 19:00:00', 980, 1, 1, 120);
 
+-- 商品规格表（SKU）：库存的最小扣减口径。attrs_key 为规格组合规范串
+-- （label:value 按 label 排序、"; " 分隔），无属性商品为 ''（默认 SKU）。
+-- rb_product.stock 为聚合库存（= 该商品全部 SKU 之和，列表展示口径）
+CREATE TABLE IF NOT EXISTS rb_sku (
+    id          INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    product_id  INT           NOT NULL COMMENT '商品ID',
+    attrs_key   VARCHAR(200)  NOT NULL DEFAULT '' COMMENT '规格组合（"颜色:黑色; 尺码:XL"，默认规格为空串）',
+    stock       INT           NOT NULL DEFAULT 0 COMMENT '该规格独立库存',
+    UNIQUE KEY uk_product_attrs (product_id, attrs_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品规格表';
+
+-- 种子数据：变体 SKU（口红分色号、连衣裙分尺码、卫衣分颜色，库存独立）
+INSERT IGNORE INTO rb_sku (id, product_id, attrs_key, stock) VALUES
+(1, 1, '颜色:红棕', 80),
+(2, 1, '颜色:豆沙', 70),
+(3, 1, '颜色:梅子', 50),
+(4, 3, '尺码:S', 40),
+(5, 3, '尺码:M', 60),
+(6, 3, '尺码:L', 50),
+(7, 4, '颜色:黑色', 160),
+(8, 4, '颜色:灰色', 100);
+
+-- 种子数据：其余商品（2/5/6/7/8/9/10）各建默认 SKU 承载商品级库存（显式 id，购物车种子引用）
+INSERT IGNORE INTO rb_sku (id, product_id, attrs_key, stock) VALUES
+(9,  2,  '', 300),
+(10, 5,  '', 500),
+(11, 6,  '', 800),
+(12, 7,  '', 180),
+(13, 8,  '', 220),
+(14, 9,  '', 350),
+(15, 10, '', 120);
+
+-- 种子数据：购物车行补规格维度（用户1的口红加购选"颜色:红棕"）
+
 -- 种子数据：3 张优惠券（主键为 ASSIGN_ID，这里用固定小值占位；
 -- 注意不能用超过 INT 上限的雪花值：rb_user_coupon.coupon_id / rb_order.coupon_id 按
 -- Java 实体 Integer 映射为 INT，存不下 BIGINT 雪花 id）
@@ -120,9 +156,9 @@ INSERT IGNORE INTO rb_user_coupon (user_id, coupon_id, status) VALUES
 (2, 1002, 0);
 
 -- 种子数据：购物车（测试用户 1 加购了口红和坚果）
-INSERT IGNORE INTO rb_cart (id, user_id, product_id, product_name, product_image, product_price, quantity, create_time, update_time) VALUES
-(1, 1, 1, '丝绒哑光口红 #小辣椒', 'https://picsum.photos/seed/product1/600/600', 219.00, 1, '2026-08-01 10:00:00', '2026-08-01 10:00:00'),
-(2, 1, 5, '手作黑糖珍珠奶茶礼盒', 'https://picsum.photos/seed/product5/600/600', 89.00, 2, '2026-08-02 15:30:00', '2026-08-02 15:30:00');
+INSERT IGNORE INTO rb_cart (id, user_id, product_id, sku_id, attributes, product_name, product_image, product_price, quantity, create_time, update_time) VALUES
+(1, 1, 1, 1, '颜色:红棕', '丝绒哑光口红 #小辣椒', 'https://picsum.photos/seed/product1/600/600', 219.00, 1, '2026-08-01 10:00:00', '2026-08-01 10:00:00'),
+(2, 1, 5, 9, '', '手作黑糖珍珠奶茶礼盒', 'https://picsum.photos/seed/product5/600/600', 89.00, 2, '2026-08-02 15:30:00', '2026-08-02 15:30:00');
 
 -- 种子数据：商品浏览记录
 INSERT IGNORE INTO rb_product_browse (product_id, user_id) VALUES

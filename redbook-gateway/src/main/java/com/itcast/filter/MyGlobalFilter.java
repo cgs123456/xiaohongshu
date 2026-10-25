@@ -25,7 +25,7 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
 
     /** 精确匹配的白名单路径（避免 startsWith 误放行 /user/sendXXX 之类端点） */
     private static final java.util.Set<String> EXACT_WHITELIST =
-            java.util.Set.of("/user/send", "/user/verify", "/note/getNoteList");
+            java.util.Set.of("/user/send", "/user/verify", "/note/getNoteList", "/order/pay/notify");
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {

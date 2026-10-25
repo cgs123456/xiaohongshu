@@ -31,7 +31,8 @@ public interface ProductClient {
      */
     @PostMapping("/product/helper/restoreStock")
     Result<Void> restoreStock(@RequestHeader("X-Internal-Token") String internalToken,
-                              @RequestParam("productId") Integer productId,
+                              @RequestParam(value = "skuId", required = false) Integer skuId,
+                              @RequestParam(value = "productId", required = false) Integer productId,
                               @RequestParam("quantity") Integer quantity);
 
     /**

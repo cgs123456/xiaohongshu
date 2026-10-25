@@ -140,6 +140,7 @@ public class OrderServiceImpl implements OrderService {
                 com.itcast.model.pojo.OrderItem orderItem = new com.itcast.model.pojo.OrderItem();
                 orderItem.setOrderId(order.getId());
                 orderItem.setProductId(item.getProductId());
+                orderItem.setSkuId(item.getSkuId());
                 orderItem.setProductName(item.getProductName());
                 orderItem.setProductImage(item.getProductImage());
                 orderItem.setUnitPrice(item.getUnitPrice());
@@ -297,8 +298,11 @@ public class OrderServiceImpl implements OrderService {
         return Result.success(vos);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.itcast.payment.PaymentGateway paymentGateway;
+
     @Override
-    public Result<Void> payOrder(Long orderId, Integer userId) {
+    public Result<String> payOrder(Long orderId, Integer userId) {
         if (orderId == null || userId == null) {
             return Result.failure("参数错误");
         }
@@ -309,7 +313,24 @@ public class OrderServiceImpl implements OrderService {
         if (order.getStatus() == null || order.getStatus() != OrderStatusEnum.DUE.getCode()) {
             return Result.failure("订单状态不可支付");
         }
-        // 乐观更新：仅当仍为待支付时置为已支付（与关单竞态时只有一方成功）
+
+        // 1.网关发起支付：同步渠道（模拟）立即完成；跳转渠道返回 payUrl 由前端跳转，等异步回调完成
+        com.itcast.payment.PaymentGateway.PayCreateResult created = paymentGateway.createPayment(order);
+        if (!created.success()) {
+            return Result.failure(created.message() == null ? "支付发起失败" : created.message());
+        }
+        if (created.payUrl() != null) {
+            log.info("支付发起成功，等待渠道回调，orderId={} tradeNo={}", orderId, created.tradeNo());
+            return Result.success(created.payUrl());
+        }
+        // 2.同步完成：状态机流转 + 流水
+        completePayment(order, created.tradeNo());
+        return Result.success(null);
+    }
+
+    /** 支付完成（同步渠道/异步回调共用）：乐观状态机 DUE->PAID + 支付流水 */
+    private void completePayment(Order order, String tradeNo) {
+        Long orderId = order.getId();
         Order update = new Order();
         update.setId(orderId);
         update.setStatus(OrderStatusEnum.PAID.getCode());
@@ -318,23 +339,41 @@ public class OrderServiceImpl implements OrderService {
         wrapper.eq(Order::getId, orderId).eq(Order::getStatus, OrderStatusEnum.DUE.getCode());
         int rows = orderMapper.update(update, wrapper);
         if (rows == 0) {
-            return Result.failure("订单状态已变化，支付失败（可能已超时取消）");
+            log.warn("订单状态已变化，放弃完成支付（可能已超时取消/已支付），orderId={}", orderId);
+            return;
         }
-        // 落支付流水（模拟支付；失败只记日志，订单状态以乐观更新为准）
         try {
             com.itcast.model.pojo.Payment payment = new com.itcast.model.pojo.Payment();
             payment.setOrderId(orderId);
-            payment.setUserId(userId);
+            payment.setUserId(order.getUserId());
             payment.setAmount(order.getFinalPrice() == null ? java.math.BigDecimal.ZERO : order.getFinalPrice());
-            payment.setPayMethod("MOCK");
+            payment.setPayMethod(paymentGateway.channel());
             payment.setStatus(1);
+            payment.setTradeNo(tradeNo);
             payment.setPayTime(java.time.LocalDateTime.now());
             paymentMapper.insert(payment);
         } catch (Exception e) {
             log.error("支付流水落库失败（不影响订单状态），orderId={}", orderId, e);
         }
-        log.info("订单支付成功（模拟支付），orderId={} userId={} amount={}", orderId, userId, order.getFinalPrice());
-        return Result.success(null);
+        log.info("订单支付完成，orderId={} channel={} tradeNo={} amount={}",
+                orderId, paymentGateway.channel(), tradeNo, order.getFinalPrice());
+    }
+
+    /** 网关异步回调：验签解析后完成支付。返回给渠道的应答文本由 Controller 决定 */
+    @Override
+    public boolean handlePayNotify(java.util.Map<String, String> params) {
+        com.itcast.payment.PaymentGateway.PayNotifyResult notify = paymentGateway.parseNotify(params);
+        if (notify == null || !notify.paid() || notify.orderId() == null) {
+            log.warn("支付回调校验未通过：{}", notify == null ? "null" : notify.message());
+            return false;
+        }
+        Order order = orderMapper.selectById(notify.orderId());
+        if (order == null) {
+            log.error("支付回调订单不存在，orderId={}", notify.orderId());
+            return false;
+        }
+        completePayment(order, notify.tradeNo());
+        return true;
     }
 
     @Override
@@ -371,11 +410,12 @@ public class OrderServiceImpl implements OrderService {
                             .eq(com.itcast.model.pojo.OrderItem::getOrderId, orderId));
             if (!items.isEmpty()) {
                 for (com.itcast.model.pojo.OrderItem item : items) {
-                    restoreStockQuietly(orderId, item.getProductId(),
+                    // 新单按 SKU 回补；历史订单无 skuId 传 productId 由 product 侧解析默认 SKU
+                    restoreStockQuietly(orderId, item.getSkuId(), item.getProductId(),
                             item.getQuantity() == null ? 1 : item.getQuantity());
                 }
             } else if (order.getProductId() != null) {
-                restoreStockQuietly(orderId, order.getProductId(),
+                restoreStockQuietly(orderId, null, order.getProductId(),
                         order.getQuantity() == null ? 1 : order.getQuantity());
             }
 
@@ -393,12 +433,13 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private void restoreStockQuietly(Long orderId, Integer productId, int quantity) {
+    private void restoreStockQuietly(Long orderId, Integer skuId, Integer productId, int quantity) {
         try {
-            productClient.restoreStock(internalToken, productId, quantity);
+            productClient.restoreStock(internalToken, skuId, productId, quantity);
         } catch (Exception e) {
-            log.error("回补库存失败，进入重试队列，orderId={} productId={}", orderId, productId, e);
-            enqueueRetryTask("S:" + productId + ":" + quantity);
+            log.error("回补库存失败，进入重试队列，orderId={} skuId={} productId={}", orderId, skuId, productId, e);
+            // 有 skuId 用 skuId，历史订单用 productId（product 侧解析默认 SKU）
+            enqueueRetryTask("S:" + (skuId != null ? "K" + skuId : "P" + productId) + ":" + quantity);
         }
     }
 
@@ -427,7 +468,11 @@ public class OrderServiceImpl implements OrderService {
         try {
             String[] parts = t.split(":");
             if (t.startsWith("S:")) {
-                productClient.restoreStock(internalToken, Integer.valueOf(parts[1]), Integer.valueOf(parts[2]));
+                // S:K{skuId}:{qty}（新）/ S:P{productId}:{qty}（历史订单，product 侧解析默认 SKU）
+                String target = parts[1];
+                Integer skuId = target.startsWith("K") ? Integer.valueOf(target.substring(1)) : null;
+                Integer productId = target.startsWith("P") ? Integer.valueOf(target.substring(1)) : null;
+                productClient.restoreStock(internalToken, skuId, productId, Integer.valueOf(parts[2]));
             } else if (t.startsWith("C:")) {
                 productClient.refundCoupon(internalToken, Integer.valueOf(parts[1]), Long.valueOf(parts[2]));
             } else {

@@ -7,14 +7,16 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * 注意：该类经 RabbitMQ 默认 JDK 序列化在 product/order 两个服务间传输，
- * 两端的字段与 serialVersionUID 必须保持一致。
+ * 库存/下单消息体（product -> product / order，Jackson 序列化；
+ * product 与 order 两端副本字段需保持一致，新增字段向后兼容）。
  */
 @Data
 public class BuyDto implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private Integer productId;
+    /** 规格id（库存分 SKU 后的扣减口径；无属性商品为默认 SKU，永不为空——发消息前必须解析） */
+    private Integer skuId;
     private List<CustomAttribute> selectAttributes;
     private Integer userId;
     /**

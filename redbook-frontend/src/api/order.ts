@@ -44,7 +44,7 @@ export const getOrderList = (page?: number, pageSize?: number) => {
     return request.get<void, ApiResponse<OrderVo[]>>('/order/getOrderList', { params })
 }
 
-// 模拟支付（orderId 为字符串路径参数）
+// 发起支付（orderId 为字符串路径参数）：data 为 null=同步完成，非 null=支付跳转 URL
 export const payOrder = (orderId: string) => {
-    return request.post<void, ApiResponse<void>>(`/order/pay/${orderId}`)
+    return request.post<string | null, ApiResponse<string | null>>(`/order/pay/${orderId}`)
 }

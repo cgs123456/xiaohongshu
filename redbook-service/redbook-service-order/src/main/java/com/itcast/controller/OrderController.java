@@ -24,10 +24,10 @@ public class OrderController {
     }
 
     /**
-     * 模拟支付：把待支付订单置为已支付并落支付流水
+     * 发起支付：同步渠道（模拟）立即完成（data=null）；跳转渠道返回支付 URL（data=payUrl）
      */
     @PostMapping("/pay/{orderId}")
-    public Result<Void> payOrder(@PathVariable String orderId) {
+    public Result<String> payOrder(@PathVariable String orderId) {
         Long id;
         try {
             id = Long.valueOf(orderId);
@@ -36,5 +36,15 @@ public class OrderController {
         }
         // 属主校验在 service 内完成（只允许支付自己的订单）
         return orderService.payOrder(id, UserContext.getUserId());
+    }
+
+    /**
+     * 支付网关异步回调（免登录——外部网关服务器调用，安全靠渠道验签）。
+     * 应答渠道约定的纯文本，不包 Result。
+     */
+    @PostMapping(value = "/pay/notify", produces = org.springframework.http.MediaType.TEXT_PLAIN_VALUE)
+    public String payNotify(@RequestParam java.util.Map<String, String> params) {
+        boolean ok = orderService.handlePayNotify(params);
+        return ok ? "success" : "fail";
     }
 }

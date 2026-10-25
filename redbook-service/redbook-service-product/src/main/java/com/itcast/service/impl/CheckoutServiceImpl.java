@@ -75,12 +75,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             return Result.failure("请勿重复提交，请稍后再试");
         }
 
-        // 1.加载购物车（全部或选中项）
+        // 1.加载购物车（全部或选中规格，同商品不同规格独立行）
         List<Cart> carts = cartMapper.selectList(
                 new LambdaQueryWrapper<Cart>().eq(Cart::getUserId, userId));
-        if (dto.getProductIds() != null && !dto.getProductIds().isEmpty()) {
+        if (dto.getSkuIds() != null && !dto.getSkuIds().isEmpty()) {
             carts = carts.stream()
-                    .filter(c -> dto.getProductIds().contains(c.getProductId()))
+                    .filter(c -> c.getSkuId() != null && dto.getSkuIds().contains(c.getSkuId()))
                     .collect(java.util.stream.Collectors.toList());
         }
         if (carts.isEmpty()) {
@@ -89,7 +89,7 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         // 2.逐项扣 Redis 库存并构建快照明细；任一失败回补全部已扣项
         List<CheckoutOrderDto.CheckoutItem> items = new ArrayList<>();
-        List<int[]> deducted = new ArrayList<>(); // {productId, quantity} 已扣成功的，用于回补
+        List<int[]> deducted = new ArrayList<>(); // {skuId, quantity} 已扣成功的，用于回补
         BigDecimal total = BigDecimal.ZERO;
         // 商品属性快照：仅单品立即购买路径传入（BuyModal），拼为 "label:value; ..." 挂到明细
         String attributesText = dto.getAttributes() == null || dto.getAttributes().isEmpty() ? null
@@ -103,20 +103,31 @@ public class CheckoutServiceImpl implements CheckoutService {
                 rollbackRedisStock(deducted);
                 return Result.failure("商品不存在或已下架：" + cart.getProductName());
             }
-            long remain = productService.deductRedisStock(product.getId(), quantity);
+            com.itcast.model.pojo.Sku sku = cart.getSkuId() != null
+                    ? productService.getSkuById(cart.getSkuId())
+                    : productService.resolveSku(cart.getProductId(), null);
+            if (sku == null) {
+                rollbackRedisStock(deducted);
+                return Result.failure("规格不存在或已下架：" + cart.getProductName());
+            }
+            long remain = productService.deductRedisStock(sku.getId(), quantity);
             if (remain < 0) {
                 rollbackRedisStock(deducted);
-                return Result.failure("库存不足：" + product.getName());
+                return Result.failure("库存不足：" + product.getName()
+                        + (cart.getAttributes() == null || cart.getAttributes().isEmpty() ? "" : "（" + cart.getAttributes() + "）"));
             }
-            deducted.add(new int[]{product.getId(), quantity});
+            deducted.add(new int[]{sku.getId(), quantity});
 
             CheckoutOrderDto.CheckoutItem item = new CheckoutOrderDto.CheckoutItem();
             item.setProductId(product.getId());
+            item.setSkuId(sku.getId());
             item.setProductName(product.getName());
             item.setProductImage(product.getImage());
             item.setUnitPrice(product.getPrice()); // 以 DB 当前价为快照（购物车里的价格可能过期）
             item.setQuantity(quantity);
-            item.setAttributes(attributesText);
+            // 规格快照：购物车行自带（默认规格为空串）；单品立即购买用 dto.attributes
+            item.setAttributes(cart.getSkuId() != null && cart.getAttributes() != null
+                    ? cart.getAttributes() : attributesText);
             items.add(item);
             total = total.add(product.getPrice().multiply(BigDecimal.valueOf(quantity)));
         }
@@ -170,6 +181,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             for (CheckoutOrderDto.CheckoutItem item : items) {
                 BuyDto stockDto = new BuyDto();
                 stockDto.setProductId(item.getProductId());
+                stockDto.setSkuId(item.getSkuId());
                 stockDto.setQuantity(item.getQuantity());
                 stockDto.setUserId(userId);
                 rabbitTemplate.convertAndSend(MqConstant.UPDATE_PRODUCT_STOCK_EXCHANGE, "", stockDto,
@@ -194,6 +206,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                     try {
                         BuyDto restoreDto = new BuyDto();
                         restoreDto.setProductId(item.getProductId());
+                        restoreDto.setSkuId(item.getSkuId());
                         restoreDto.setQuantity(item.getQuantity());
                         restoreDto.setUserId(userId);
                         restoreDto.setRestore(true);
@@ -222,11 +235,11 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         // 5.清理已结算的购物车项
         try {
-            List<Integer> productIds = items.stream()
-                    .map(CheckoutOrderDto.CheckoutItem::getProductId).collect(java.util.stream.Collectors.toList());
+            List<Integer> settledSkuIds = items.stream()
+                    .map(CheckoutOrderDto.CheckoutItem::getSkuId).collect(java.util.stream.Collectors.toList());
             cartMapper.delete(new LambdaQueryWrapper<Cart>()
                     .eq(Cart::getUserId, userId)
-                    .in(Cart::getProductId, productIds));
+                    .in(Cart::getSkuId, settledSkuIds));
         } catch (Exception e) {
             // 清理失败不影响下单（购物车残留可由用户手动删除）
             log.warn("结算后清理购物车失败，userId={}", userId, e);

@@ -29,13 +29,20 @@ public class CartController {
     /**
      * 添加商品到购物车
      */
+    /** 加购请求体（attributes 为可选规格选择，空取默认 SKU） */
+    @lombok.Data
+    public static class AddToCartDto {
+        private Integer productId;
+        private Integer quantity = 1;
+        private java.util.Map<String, String> attributes;
+    }
+
     @PostMapping("/addToCart")
-    public Result<Void> addToCart(@RequestParam Integer productId,
-                                  @RequestParam(defaultValue = "1") Integer quantity) {
-        if (productId == null) {
+    public Result<Integer> addToCart(@RequestBody AddToCartDto dto) {
+        if (dto == null || dto.getProductId() == null) {
             return Result.failure("商品ID不能为空");
         }
-        return cartService.addToCart(productId, quantity);
+        return cartService.addToCart(dto.getProductId(), dto.getQuantity(), dto.getAttributes());
     }
 
     /**

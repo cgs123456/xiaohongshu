@@ -119,14 +119,30 @@ public class ProductController {
 
     @PostMapping("/helper/restoreStock")
     public Result<Void> restoreStock(@RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
-                                     @RequestParam("productId") Integer productId,
+                                     @RequestParam(value = "skuId", required = false) Integer skuId,
+                                     @RequestParam(value = "productId", required = false) Integer productId,
                                      @RequestParam("quantity") Integer quantity) {
-        if (productId == null || quantity == null || quantity <= 0) {
-            return Result.failure("参数错误");
-        }
         if (!internalTokenGuard.isValid(internalToken)) {
             return Result.failure("无效的内部令牌");
         }
-        return productService.restoreStock(productId, quantity);
+        // 历史订单无 skuId：按商品默认 SKU 兜底解析
+        Integer target = skuId;
+        if (target == null && productId != null) {
+            com.itcast.model.pojo.Sku sku = productService.resolveSku(productId, null);
+            if (sku == null) {
+                return Result.failure("商品默认规格不存在");
+            }
+            target = sku.getId();
+        }
+        if (target == null) {
+            return Result.failure("skuId与productId至少传一个");
+        }
+        return productService.restoreStock(target, quantity == null ? 0 : quantity);
+    }
+
+    /** 商品全部 SKU（详情页规格选择/库存展示用，公开接口） */
+    @GetMapping("/getSkus/{productId}")
+    public Result<java.util.List<com.itcast.model.pojo.Sku>> getSkus(@PathVariable Integer productId) {
+        return productService.getSkus(productId);
     }
 }

@@ -27,6 +27,8 @@ public class OrderItem {
 
     @TableField("product_id")
     private Integer productId;
+    /** 规格id（SKU 库存扣减口径；历史订单为 null，回补走 productId 兜底） */
+    private Integer skuId;
 
     @TableField("product_name")
     private String productName;

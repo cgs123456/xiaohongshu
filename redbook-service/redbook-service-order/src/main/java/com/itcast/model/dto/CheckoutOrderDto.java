@@ -35,6 +35,8 @@ public class CheckoutOrderDto implements Serializable {
         private static final long serialVersionUID = 1L;
 
         private Integer productId;
+        /** 规格id（库存扣减口径；无属性商品为默认 SKU） */
+        private Integer skuId;
         private String productName;
         private String productImage;
         private BigDecimal unitPrice;

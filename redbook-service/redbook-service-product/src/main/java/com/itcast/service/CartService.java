@@ -9,7 +9,8 @@ public interface CartService {
     /**
      * 添加商品到购物车
      */
-    Result<Void> addToCart(Integer productId, Integer quantity);
+    /** 加购（attributes 为空取默认 SKU）；返回 data=skuId 供结算按规格提交 */
+    Result<Integer> addToCart(Integer productId, Integer quantity, java.util.Map<String, String> attributes);
 
     /**
      * 获取用户购物车列表

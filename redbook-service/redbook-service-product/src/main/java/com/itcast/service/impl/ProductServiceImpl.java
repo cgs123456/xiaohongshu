@@ -10,6 +10,9 @@ import com.itcast.mapper.ProductMapper;
 import com.itcast.mapper.ShopMapper;
 import com.itcast.model.dto.BuyDto;
 import com.itcast.model.dto.ProductDto;
+import com.itcast.model.dto.SkuDto;
+import com.itcast.model.pojo.Sku;
+import com.itcast.util.SkuKeyUtil;
 import com.itcast.model.pojo.Product;
 import com.itcast.model.pojo.ProductAttribute;
 import com.itcast.model.pojo.Shop;
@@ -40,6 +43,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Autowired
     private ProductMapper productMapper;
+
+    @Autowired
+    private com.itcast.mapper.SkuMapper skuMapper;
 
     @Autowired
     private ShopMapper shopMapper;
@@ -162,6 +168,36 @@ public class ProductServiceImpl implements ProductService {
             mongoTemplate.insert(productAttribute);
         }
 
+        // 4.创建 SKU（库存最小扣减口径）：声明了 skus 按规格建；否则建默认 SKU 承载商品级库存
+        int totalStock = 0;
+        if (productDto.getSkus() != null && !productDto.getSkus().isEmpty()) {
+            for (SkuDto skuDto : productDto.getSkus()) {
+                if (skuDto == null || skuDto.getStock() == null || skuDto.getStock() < 0) {
+                    continue;
+                }
+                Sku sku = new Sku();
+                sku.setProductId(product.getId());
+                sku.setAttrsKey(SkuKeyUtil.build(skuDto.getAttributes()));
+                sku.setStock(skuDto.getStock());
+                skuMapper.insert(sku);
+                totalStock += skuDto.getStock();
+            }
+        }
+        if (totalStock == 0) {
+            Sku sku = new Sku();
+            sku.setProductId(product.getId());
+            sku.setAttrsKey("");
+            sku.setStock(product.getStock() == null ? 0 : product.getStock());
+            skuMapper.insert(sku);
+            totalStock = sku.getStock();
+        } else {
+            // 聚合库存 = SKU 之和（列表展示口径）
+            Product stockSync = new Product();
+            stockSync.setId(product.getId());
+            stockSync.setStock(totalStock);
+            productMapper.updateById(stockSync);
+        }
+
         return Result.success(null);
     }
 
@@ -198,22 +234,30 @@ public class ProductServiceImpl implements ProductService {
         }
         buyDto.setQuantity(quantity);
 
-        String key = RedisConstant.PRODUCT_STOCK_CACHE + buyDto.getProductId();
+        // 0.4 解析 SKU：无属性购买取默认 SKU（attrs_key=""），Agent/直购路径统一在此落口径
+        Sku sku = buyDto.getSkuId() != null
+                ? skuMapper.selectById(buyDto.getSkuId())
+                : resolveSku(buyDto.getProductId(), null);
+        if (sku == null) {
+            return Result.failure("商品不存在或规格已下架");
+        }
+        buyDto.setSkuId(sku.getId());
+        buyDto.setProductId(sku.getProductId());
 
-        // 0.5 用户级请求幂等（防双击/重放）：userId+productId 5 秒去重窗口。
+        // 0.5 用户级请求幂等（防双击/重放）：userId+skuId 5 秒去重窗口。
         // 消息级 messageId 幂等只能防 broker 重投，防不了同一用户连发两次请求
         if (buyDto.getUserId() != null) {
-            String requestKey = "buy:idem:" + buyDto.getUserId() + ":" + buyDto.getProductId();
+            String requestKey = "buy:idem:" + buyDto.getUserId() + ":" + sku.getId();
             Boolean first = redisTemplate.opsForValue().setIfAbsent(requestKey, "1", 5, TimeUnit.SECONDS);
             if (Boolean.FALSE.equals(first)) {
                 return Result.failure("请勿重复提交，请稍后再试");
             }
         }
 
-        // 1&3.Redis Lua 原子扣减（含预热，与结算链路共用）
-        Long result = deductRedisStockInternal(buyDto.getProductId(), quantity);
+        // 1&3.Redis Lua 原子扣减（含预热，与结算链路共用，SKU 级）
+        Long result = deductRedisStockInternal(sku.getId(), quantity);
         if (result == null || result < 0) {
-            // -1库存不足 / -2库存key不存在，统一按库存不足处理
+            // -1库存不足 / -2 SKU不存在，统一按库存不足处理
             return Result.failure("库存不足");
         }
 
@@ -231,11 +275,11 @@ public class ProductServiceImpl implements ProductService {
         } catch (Exception e) {
             log.error("下单消息发送失败，开始补偿，productId={} quantity={}",
                     buyDto.getProductId(), quantity, e);
-            // 回补 Redis 扣减
+            // 回补 Redis 扣减（SKU 级）
             try {
-                redisTemplate.opsForValue().increment(key, quantity.longValue());
+                restoreRedisStock(sku.getId(), quantity);
             } catch (Exception ex) {
-                log.error("CRITICAL: Redis 库存回补失败，需人工核对，key={} quantity={}", key, quantity, ex);
+                log.error("CRITICAL: Redis 库存回补失败，需人工核对，skuId={} quantity={}", sku.getId(), quantity, ex);
             }
             // MySQL 扣减消息已发出则补发回滚消息
             if (stockMsgSent) {
@@ -312,40 +356,40 @@ public class ProductServiceImpl implements ProductService {
             "end";
 
     @Override
-    public long deductRedisStock(Integer productId, int quantity) {
-        Long result = deductRedisStockInternal(productId, quantity);
+    public long deductRedisStock(Integer skuId, int quantity) {
+        Long result = deductRedisStockInternal(skuId, quantity);
         return result == null ? -1 : result;
     }
 
     /**
-     * 分布式锁预热 + Lua 原子扣减（buyProduct 与购物车结算共用）
+     * 分布式锁预热 + Lua 原子扣减（buyProduct 与购物车结算共用，SKU 级）
      */
-    private Long deductRedisStockInternal(Integer productId, int quantity) {
-        String key = RedisConstant.PRODUCT_STOCK_CACHE + productId;
+    private Long deductRedisStockInternal(Integer skuId, int quantity) {
+        String key = RedisConstant.PRODUCT_SKU_STOCK_CACHE + skuId;
 
         // 缓存预热（tryLock 防止长时间阻塞）
-        RLock lock = redissonClient.getLock("buyProduct:" + productId);
+        RLock lock = redissonClient.getLock("buySku:" + skuId);
         boolean locked = false;
         try {
             locked = lock.tryLock(3, TimeUnit.SECONDS);
             if (!locked) {
-                log.warn("获取缓存预热锁失败，productId={}", productId);
+                log.warn("获取缓存预热锁失败，skuId={}", skuId);
                 return -1L;
             }
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-                Product product = productMapper.selectById(productId);
-                if (product == null) {
+                Sku sku = skuMapper.selectById(skuId);
+                if (sku == null) {
                     return -2L;
                 }
-                redisTemplate.opsForValue().set(key, product.getStock());
+                redisTemplate.opsForValue().set(key, sku.getStock() == null ? 0 : sku.getStock());
                 redisTemplate.expire(key, 60 * 60 * 24, TimeUnit.SECONDS);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("获取缓存预热锁被中断，productId={}", productId, e);
+            log.error("获取缓存预热锁被中断，skuId={}", skuId, e);
             return -1L;
         } catch (Exception e) {
-            log.error("缓存预热异常，productId={}", productId, e);
+            log.error("缓存预热异常，skuId={}", skuId, e);
             return -1L;
         } finally {
             if (locked) {
@@ -358,12 +402,37 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public void restoreRedisStock(Integer productId, int quantity) {
+    public void restoreRedisStock(Integer skuId, int quantity) {
         try {
-            redisTemplate.opsForValue().increment(RedisConstant.PRODUCT_STOCK_CACHE + productId, quantity);
+            redisTemplate.opsForValue().increment(RedisConstant.PRODUCT_SKU_STOCK_CACHE + skuId, quantity);
         } catch (Exception e) {
-            log.error("CRITICAL: Redis 库存回补失败，需人工核对，productId={} quantity={}", productId, quantity, e);
+            log.error("CRITICAL: Redis 库存回补失败，需人工核对，skuId={} quantity={}", skuId, quantity, e);
         }
+    }
+
+    @Override
+    public Sku resolveSku(Integer productId, java.util.Map<String, String> attributes) {
+        if (productId == null) {
+            return null;
+        }
+        String attrsKey = SkuKeyUtil.build(attributes);
+        return skuMapper.selectOne(new LambdaQueryWrapper<Sku>()
+                .eq(Sku::getProductId, productId)
+                .eq(Sku::getAttrsKey, attrsKey)
+                .last("LIMIT 1"));
+    }
+
+    @Override
+    public Sku getSkuById(Integer skuId) {
+        return skuId == null ? null : skuMapper.selectById(skuId);
+    }
+
+    @Override
+    public Result<java.util.List<Sku>> getSkus(Integer productId) {
+        if (productId == null) {
+            return Result.failure("商品ID不能为空");
+        }
+        return Result.success(skuMapper.selectByProductId(productId));
     }
 
     @Override
@@ -398,26 +467,28 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Result<Void> restoreStock(Integer productId, int quantity) {
-        if (productId == null || quantity <= 0) {
+    public Result<Void> restoreStock(Integer skuId, int quantity) {
+        if (skuId == null || quantity <= 0) {
             return Result.failure("参数错误");
         }
         try {
-            // 1.MySQL原子加库存
-            int rows = productMapper.restoreStock(productId, quantity);
-            if (rows == 0) {
-                log.error("回补库存失败，商品不存在，productId={} quantity={}", productId, quantity);
-                return Result.failure("商品不存在");
+            Sku sku = skuMapper.selectById(skuId);
+            if (sku == null) {
+                log.error("回补库存失败，SKU 不存在，skuId={} quantity={}", skuId, quantity);
+                return Result.failure("规格不存在");
             }
-            // 2.Redis同步加库存（key与buyProduct的库存key完全一致；key不存在时先预热）
-            String key = RedisConstant.PRODUCT_STOCK_CACHE + productId;
+            // 1.MySQL 两级原子加库存（SKU + 商品聚合，同事务由调用方保证；此处消费链路为顺序两写）
+            skuMapper.restoreStock(skuId, quantity);
+            skuMapper.restoreProductStock(sku.getProductId(), quantity);
+            // 2.Redis 同步加库存（key 与扣减侧完全一致；key 不存在时不预热——下次扣减会预热）
+            String key = RedisConstant.PRODUCT_SKU_STOCK_CACHE + skuId;
             if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
                 redisTemplate.opsForValue().increment(key, quantity);
             }
-            log.info("回补库存成功，productId={} quantity={}", productId, quantity);
+            log.info("回补库存成功，skuId={} productId={} quantity={}", skuId, sku.getProductId(), quantity);
             return Result.success(null);
         } catch (Exception e) {
-            log.error("回补库存异常，productId={} quantity={}", productId, quantity, e);
+            log.error("回补库存异常，skuId={} quantity={}", skuId, quantity, e);
             return Result.failure("回补库存失败");
         }
     }

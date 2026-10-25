@@ -29,7 +29,11 @@ public interface OrderService {
     /**
      * 模拟支付：校验属主与待支付状态后置为已支付并落支付流水
      */
-    Result<Void> payOrder(Long orderId, Integer userId);
+    /** 发起支付：data 为 null=同步完成，非 null=支付跳转 URL（等渠道异步回调完成） */
+    Result<String> payOrder(Long orderId, Integer userId);
+
+    /** 支付网关异步回调处理（验签+完成支付），成功返回 true */
+    boolean handlePayNotify(java.util.Map<String, String> params);
 
     /**
      * 关单公共逻辑：若订单仍处于待支付状态则取消，回补商品库存并退还优惠券

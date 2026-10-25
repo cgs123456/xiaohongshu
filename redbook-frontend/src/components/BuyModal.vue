@@ -75,7 +75,7 @@
     <!-- 结算弹层（收货信息与优惠券在结算时选择；选中属性随单落订单明细） -->
     <CheckoutModal
       v-model:visible="checkoutVisible"
-      :product-ids="checkoutProductIds"
+      :sku-ids="checkoutSkuIds"
       :amount="checkoutAmount"
       :item-count="1"
       :attributes="checkoutAttributes"
@@ -117,7 +117,7 @@ const emit = defineEmits<Emits>()
 const selectedAttributes = ref<Map<number, string>>(new Map())
 const loading = ref(false)
 const checkoutVisible = ref(false)
-const checkoutProductIds = ref<number[]>([])
+const checkoutSkuIds = ref<number[]>([])
 const checkoutAmount = ref(0)
 const checkoutAttributes = ref<Record<string, string>>({})
 
@@ -158,10 +158,7 @@ const handleConfirm = async () => {
 
   try {
     loading.value = true
-    await addToCart(props.product.id, 1)
-    checkoutProductIds.value = [props.product.id]
-    checkoutAmount.value = props.product.price
-    // 选中属性（attrIndex -> option）转为 label -> option 随结算落单
+    // 选中属性（attrIndex -> option）转为 label -> option：加购时解析 SKU、结算时随单快照
     const attrMap: Record<string, string> = {}
     if (props.attributes) {
       props.attributes.forEach((attr, index) => {
@@ -171,6 +168,9 @@ const handleConfirm = async () => {
         }
       })
     }
+    const resp = await addToCart(props.product.id, 1, Object.keys(attrMap).length > 0 ? attrMap : undefined)
+    checkoutSkuIds.value = resp.data ? [resp.data] : []
+    checkoutAmount.value = props.product.price
     checkoutAttributes.value = attrMap
     checkoutVisible.value = true
   } catch (error: unknown) {

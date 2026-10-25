@@ -46,13 +46,13 @@ export interface CouponVo {
     isUsable: boolean
 }
 
-// 购物车结算（收货信息 + 可选优惠券；productIds 为空 = 结算购物车全部商品）
+// 购物车结算（收货信息 + 可选优惠券；skuIds 为空 = 结算购物车全部商品）
 export interface CheckoutDto {
     receiverName: string
     receiverPhone: string
     address: string
     couponId?: string
-    productIds?: number[]
+    skuIds?: number[]
     // 商品属性选择（label -> 选中值），仅"单品立即购买"路径携带，随单快照落订单明细
     attributes?: Record<string, string>
 }
@@ -103,6 +103,8 @@ export interface Cart {
     id: number
     userId: number
     productId: number
+    skuId?: number
+    attributes?: string
     productName: string
     productImage: string
     productPrice: number
@@ -111,10 +113,12 @@ export interface Cart {
     updateTime: string
 }
 
-// 添加商品到购物车
-export const addToCart = (productId: number, quantity: number = 1) => {
-    return request.post<void, ApiResponse<void>>('/cart/addToCart', null, {
-        params: { productId, quantity }
+// 添加商品到购物车（attributes 为规格选择，空取默认 SKU）；返回 data=skuId 供结算按规格提交
+export const addToCart = (productId: number, quantity: number = 1, attributes?: Record<string, string>) => {
+    return request.post<number, ApiResponse<number>>('/cart/addToCart', {
+        productId,
+        quantity,
+        attributes
     })
 }
 

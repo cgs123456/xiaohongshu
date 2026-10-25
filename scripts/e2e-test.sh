@@ -45,7 +45,7 @@ curl -s -m 8 "$GW/cart/getCartList" -H "token: $TOKEN" | python -c "import json,
 
 # 5. 加购后结算（新注册用户无持券，不用券）
 step "addToCart"
-curl -s -m 8 -X POST "$GW/cart/addToCart?productId=1&quantity=2" -H "token: $TOKEN" >> "$OUT"; echo >> "$OUT"
+curl -s -m 8 -X POST "$GW/cart/addToCart" -H "token: $TOKEN" -H "Content-Type: application/json"   -d '{"productId":1,"quantity":2,"attributes":{"\u989c\u8272":"\u7ea2\u68d5"}}' >> "$OUT"; echo >> "$OUT"
 
 step "checkout"
 curl -s -m 15 -X POST "$GW/cart/checkout" -H "token: $TOKEN" -H "Content-Type: application/json" \

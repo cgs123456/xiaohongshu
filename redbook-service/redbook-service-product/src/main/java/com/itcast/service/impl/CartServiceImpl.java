@@ -27,9 +27,13 @@ public class CartServiceImpl implements CartService {
     @Autowired
     private ProductMapper productMapper;
 
+    /** 直接用 Mapper 解析 SKU：注入 ProductService 会形成 ShoppingAgent 循环依赖 */
+    @Autowired
+    private com.itcast.mapper.SkuMapper skuMapper;
+
     @Override
     @Transactional
-    public Result<Void> addToCart(Integer productId, Integer quantity) {
+    public Result<Integer> addToCart(Integer productId, Integer quantity, java.util.Map<String, String> attributes) {
         Integer userId = UserContext.getUserId();
         if (userId == null) {
             return Result.failure("用户未登录");
@@ -45,15 +49,22 @@ public class CartServiceImpl implements CartService {
             return Result.failure("商品不存在");
         }
 
-        // 检查库存
-        if (product.getStock() < quantity) {
-            return Result.failure("库存不足");
+        // 解析 SKU（attributes 空 -> 默认 SKU），库存按规格校验
+        com.itcast.model.pojo.Sku sku = skuMapper.selectOne(new LambdaQueryWrapper<com.itcast.model.pojo.Sku>()
+                .eq(com.itcast.model.pojo.Sku::getProductId, productId)
+                .eq(com.itcast.model.pojo.Sku::getAttrsKey, com.itcast.util.SkuKeyUtil.build(attributes))
+                .last("LIMIT 1"));
+        if (sku == null) {
+            return Result.failure("该规格不存在或已下架");
+        }
+        if (sku.getStock() == null || sku.getStock() < quantity) {
+            return Result.failure("该规格库存不足");
         }
 
-        // 检查购物车中是否已存在该商品
+        // 购物车以 (userId, skuId) 为唯一行：同商品不同规格各占一行
         LambdaQueryWrapper<Cart> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Cart::getUserId, userId)
-                   .eq(Cart::getProductId, productId);
+                   .eq(Cart::getSkuId, sku.getId());
         Cart existingCart = cartMapper.selectOne(queryWrapper);
 
         if (existingCart != null) {
@@ -66,6 +77,8 @@ public class CartServiceImpl implements CartService {
             Cart cart = new Cart();
             cart.setUserId(userId);
             cart.setProductId(productId);
+            cart.setSkuId(sku.getId());
+            cart.setAttributes(com.itcast.util.SkuKeyUtil.build(attributes));
             cart.setProductName(product.getName());
             cart.setProductImage(product.getImage());
             cart.setProductPrice(product.getPrice());
@@ -75,7 +88,7 @@ public class CartServiceImpl implements CartService {
             cartMapper.insert(cart);
         }
 
-        return Result.success(null);
+        return Result.success(sku.getId());
     }
 
     @Override

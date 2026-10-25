@@ -39,6 +39,7 @@
             <img :src="item.productImage" :alt="item.productName" class="item-image" />
             <div class="item-info">
               <h4 class="item-name">{{ item.productName }}</h4>
+              <p v-if="item.attributes" class="item-attrs">{{ item.attributes }}</p>
               <div class="item-price">¥{{ item.productPrice }}</div>
             </div>
             <div class="quantity-control">
@@ -80,7 +81,7 @@
     <!-- 结算弹层 -->
     <CheckoutModal
       v-model:visible="checkoutVisible"
-      :product-ids="selectedProductIds"
+      :sku-ids="selectedSkuIds"
       :amount="selectedTotalPrice"
       :item-count="selectedCount"
       @success="handleCheckoutSuccess"
@@ -115,7 +116,7 @@ const selectedCount = computed(() => selectedItems.value.reduce((sum, item) => s
 const selectedTotalPrice = computed(() =>
   selectedItems.value.reduce((sum, item) => sum + item.productPrice * item.quantity, 0)
 )
-const selectedProductIds = computed(() => selectedItems.value.map(i => i.productId))
+const selectedSkuIds = computed(() => selectedItems.value.map(i => i.skuId).filter((id): id is number => id != null))
 
 // 勾选/取消勾选
 const toggleSelect = (id: number) => {
@@ -308,6 +309,12 @@ onMounted(() => {
 .item-info {
   flex: 1;
   min-width: 0;
+}
+
+.item-attrs {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #999;
 }
 
 .item-name {

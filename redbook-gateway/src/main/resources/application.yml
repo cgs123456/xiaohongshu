@@ -25,6 +25,13 @@ spring:
           uri: lb://redbook-service-user
           predicates:
             - Path=/user/**
+        # 用户内部端点封堵（粉丝列表等，仅服务间带 INTERNAL_TOKEN 直连调用）
+        - id: redbook-service-user-internal-block
+          uri: no://op
+          predicates:
+            - Path=/user/helper/**
+          filters:
+            - SetStatus=404
         # 笔记管理端点封堵（审核队列接口，仅服务间带 INTERNAL_TOKEN 直连调用）
         - id: redbook-service-note-admin-block
           uri: no://op

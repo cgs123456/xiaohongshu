@@ -22,8 +22,8 @@ public class CheckoutDto {
     /** 使用的优惠券 id（可空） */
     private Long couponId;
 
-    /** 只结算指定商品（购物车项的 productId 集合）；为空表示结算全部购物车 */
-    private List<Integer> productIds;
+    /** 只结算指定规格（购物车项的 skuId 集合，同商品不同规格独立行）；为空表示结算全部购物车 */
+    private List<Integer> skuIds;
 
     /**
      * 商品属性选择（label -> 选中值），仅"单品立即购买"路径使用（BuyModal 单商品结算）；

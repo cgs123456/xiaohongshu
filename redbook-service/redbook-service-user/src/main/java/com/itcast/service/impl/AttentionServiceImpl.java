@@ -110,6 +110,24 @@ public class AttentionServiceImpl implements AttentionService {
     }
 
     @Override
+    public Result<List<Integer>> getFollowerIds(Integer otherId, Integer page, Integer pageSize) {
+        if (otherId == null) {
+            return Result.success(java.util.Collections.emptyList());
+        }
+        int p = (page == null || page < 1) ? 1 : page;
+        int size = (pageSize == null || pageSize < 1) ? 500 : Math.min(pageSize, 1000);
+        LambdaQueryWrapper<Attention> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Attention::getOtherId, otherId)
+                .select(Attention::getOwnId)
+                .orderByDesc(Attention::getId)
+                .last("LIMIT " + size + " OFFSET " + (long) (p - 1) * size);
+        return Result.success(attentionMapper.selectList(wrapper).stream()
+                .map(Attention::getOwnId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toList()));
+    }
+
+    @Override
     public Result<List<Attention>> getAttention(Integer userId) {
         // 关注数可达数千以上，全量返回会拖垮接口；这里取最近 500 条（此前无界）
         LambdaQueryWrapper<Attention> queryWrapper = new LambdaQueryWrapper<>();

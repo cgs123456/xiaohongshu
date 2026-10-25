@@ -21,4 +21,10 @@ public interface UserClient {
 
     @GetMapping("/user/getAttention/{userId}")
     Result<List<Attention>> getAttention(@PathVariable("userId") Integer userId);
+
+    /** 粉丝 id 分页（发布扇出用，内部端点，FeignHeaderPropagator 附带内部令牌） */
+    @GetMapping("/user/helper/getFollowerIds")
+    Result<List<Integer>> getFollowerIds(@RequestParam("otherId") Integer otherId,
+                                         @RequestParam("page") Integer page,
+                                         @RequestParam("pageSize") Integer pageSize);
 }

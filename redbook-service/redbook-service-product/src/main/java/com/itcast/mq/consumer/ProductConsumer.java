@@ -1,7 +1,6 @@
 package com.itcast.mq.consumer;
 
 import com.itcast.constant.MqConstant;
-import com.itcast.mapper.ProductMapper;
 import com.itcast.model.dto.BuyDto;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +28,7 @@ public class ProductConsumer {
     private static final String RETRY_KEY = "stock:retry:";
 
     @Autowired
-    private ProductMapper productMapper;
+    private StockSyncService stockSyncService;
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -80,26 +79,21 @@ public class ProductConsumer {
     private void apply(BuyDto buyDto) {
         Integer productId = buyDto.getProductId();
         int quantity = buyDto.getQuantity() == null ? 1 : buyDto.getQuantity();
-        if (productId == null) {
-            throw new IllegalArgumentException("库存消息缺少 productId");
+        if (buyDto.getSkuId() == null && productId == null) {
+            throw new IllegalArgumentException("库存消息缺少 skuId/productId");
         }
 
-        // 补偿消息：MQ 发送失败时补发的回滚指令，直接回补 MySQL 库存
+        // 补偿消息：MQ 发送失败时补发的回滚指令，直接回补 MySQL 两级库存
         if (Boolean.TRUE.equals(buyDto.getRestore())) {
-            log.info("补偿回补商品库存，productId={} quantity={}", productId, quantity);
-            productMapper.restoreStock(productId, quantity);
+            log.info("补偿回补商品库存，skuId={} quantity={}", buyDto.getSkuId(), quantity);
+            stockSyncService.restore(buyDto.getSkuId(), productId, quantity);
             return;
         }
 
-        log.info("更新商品{}的库存，数量{}", productId, quantity);
-        // 原子条件扣减库存（stock >= quantity 才扣减），避免读改写竞态。
-        // 扣不动说明 Redis/MySQL 库存已漂移：此时订单可能已创建（另一条消息），
-        // 记 CRITICAL 供人工核对——这不是异常路径，重试同样扣不动
-        int rows = productMapper.deductStock(productId, quantity);
-        if (rows == 0) {
-            log.error("CRITICAL: MySQL扣减库存失败（库存不足或商品不存在，Redis/MySQL 库存疑似漂移），" +
-                    "productId={} quantity={}", productId, quantity);
-        }
+        log.info("更新 SKU {} 的库存，数量 {}（productId={}）", buyDto.getSkuId(), quantity, productId);
+        // 事务内两级原子扣减（SKU 条件扣减 + 商品聚合），扣不动记 CRITICAL 供人工核对——
+        // 这不是异常路径（重试同样扣不动）
+        stockSyncService.deduct(buyDto);
     }
 
     private long nextRetryCount(String messageId) {
