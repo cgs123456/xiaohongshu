@@ -4,12 +4,15 @@
 
 [![CI](https://github.com/cgs123456/xiaohongshu/actions/workflows/ci.yml/badge.svg)](https://github.com/cgs123456/xiaohongshu/actions/workflows/ci.yml)
 
+<img src="docs/screenshots/home.png" alt="首页信息流（登录态）" width="720">
+
 9 个后端微服务 + Vue 3 前端，6 类中间件，从登录发帖到下单支付的完整闭环。已内置全链路 E2E 脚本与 CI，`master` 每次推送自动构建前后端。
 
 ## 目录
 
 - [快速开始](#快速开始)
 - [功能特性](#功能特性)
+- [界面预览](#界面预览)
 - [架构一览](#架构一览)
 - [配置](#配置)
 - [测试与质量](#测试与质量)
@@ -59,6 +62,19 @@ cd redbook-frontend && npm install && npm run dev   # http://localhost:5173
 **前端体验**
 - 设计令牌体系（CSS 变量唯一事实源）、lucide 图标语言、骨架屏渐进加载、空/错态组件化、弹窗移动端全屏
 - 游客可浏览商城，写操作才引导登录
+
+## 界面预览
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/note-detail.png" alt="笔记详情（图左文右 + 评论互动）" width="360"></td>
+    <td><img src="docs/screenshots/shopping.png" alt="商城（SKU 商品卡 + 购物助手）" width="360"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/cart.png" alt="购物车结算" width="360"></td>
+    <td><img src="docs/screenshots/home-mobile.png" alt="移动端响应式（390px 单列）" width="200"></td>
+  </tr>
+</table>
 
 ## 架构一览
 
