@@ -25,7 +25,12 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
 
     /** 精确匹配的白名单路径（避免 startsWith 误放行 /user/sendXXX 之类端点） */
     private static final java.util.Set<String> EXACT_WHITELIST =
-            java.util.Set.of("/user/send", "/user/verify", "/note/getNoteList", "/order/pay/notify");
+            java.util.Set.of("/user/send", "/user/verify", "/note/getNoteList",
+                    "/order/pay/notify", "/product/getProductList");
+
+    /** 前缀匹配的白名单：游客可浏览商城（只读），加购/下单仍走认证 */
+    private static final java.util.Set<String> PREFIX_WHITELIST =
+            java.util.Set.of("/product/getProduct/", "/product/getSkus/");
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -38,7 +43,7 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
         log.info("请求接口为：{}", path);
         // WebSocket 握手放行：浏览器 WS API 无法携带自定义 header，
         // 认证由 message 服务 WebSocketHandler 在首条消息中校验 JWT 完成
-        if (EXACT_WHITELIST.contains(path) || path.startsWith("/ws/")) {
+        if (isWhitelisted(path) || path.startsWith("/ws/")) {
             log.info("请求接口放行");
             return chain.filter(exchange);
         }
@@ -68,6 +73,19 @@ public class MyGlobalFilter implements GlobalFilter, Ordered {
             response.setStatusCode(HttpStatus.valueOf(ResponseEnum.UNAUTHORIZED.getCode()));
             return response.setComplete();
         }
+    }
+
+    /** 前缀白名单只匹配带路径变量的只读端点（如 /product/getProduct/1），尾斜杠界定避免误放行 */
+    private boolean isWhitelisted(String path) {
+        if (EXACT_WHITELIST.contains(path)) {
+            return true;
+        }
+        for (String prefix : PREFIX_WHITELIST) {
+            if (path.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

@@ -87,13 +87,18 @@ function restore(): void {
     }
 }
 
+// reactive 包装：顶层 computed(isLoggedIn) 在模板与 .ts 中都自动解包为 boolean。
+// 此前返回普通对象，isLoggedIn 是 ComputedRef 引用（恒 truthy）——
+// 401 拦截器的未登录守卫失效、未登录 header 误渲染头像均由此而来
+const store = reactive({
+    state,
+    isLoggedIn,
+    login,
+    setUserInfo,
+    logout,
+    restore
+})
+
 export function useUserStore() {
-    return {
-        state,
-        isLoggedIn,
-        login,
-        setUserInfo,
-        logout,
-        restore
-    }
+    return store
 }

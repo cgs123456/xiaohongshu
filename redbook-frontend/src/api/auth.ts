@@ -142,10 +142,15 @@ request.interceptors.response.use(
             return new Promise<never>(() => {})
         }
 
-        // 401 未授权，清除 token 并通知打开登录弹窗（不再整页刷新）
+        // 401 未授权：仅"已登录但会话失效"才全局弹登录框（token 过期/被顶下线）。
+        // 游客状态下页面加载触发的被动 401（如残留的信息拉取）静默拒绝——
+        // 全局弹窗会打断浏览（游客逛商城场景），需要登录的操作由各页面自行引导
         if (error.response?.status === 401) {
-            useUserStore().logout()
-            emitAuthRequired()
+            const userStore = useUserStore()
+            if (userStore.isLoggedIn) {
+                userStore.logout()
+                emitAuthRequired()
+            }
             const authError = new Error('未授权，请重新登录')
             settleFollowers(key, null, authError)
             return Promise.reject(authError)

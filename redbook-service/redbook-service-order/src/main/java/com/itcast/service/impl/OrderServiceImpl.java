@@ -311,6 +311,20 @@ public class OrderServiceImpl implements OrderService {
         }
         if (created.payUrl() != null) {
             log.info("支付发起成功，等待渠道回调，orderId={} tradeNo={}", orderId, created.tradeNo());
+            // 跳转类渠道先落"处理中"流水：异步回调或查单补偿据此对账，
+            // 防止回调丢失后订单永远停留待支付且无据可查
+            try {
+                com.itcast.model.pojo.Payment pending = new com.itcast.model.pojo.Payment();
+                pending.setOrderId(orderId);
+                pending.setUserId(userId);
+                pending.setAmount(order.getFinalPrice() == null ? java.math.BigDecimal.ZERO : order.getFinalPrice());
+                pending.setPayMethod(paymentGateway.channel());
+                pending.setTradeNo(created.tradeNo());
+                pending.setStatus(0);
+                paymentMapper.insert(pending);
+            } catch (Exception e) {
+                log.error("支付中流水落库失败（不影响支付发起），orderId={} tradeNo={}", orderId, created.tradeNo(), e);
+            }
             return Result.success(created.payUrl());
         }
         // 2.同步完成：状态机流转 + 流水
@@ -333,15 +347,30 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
         try {
-            com.itcast.model.pojo.Payment payment = new com.itcast.model.pojo.Payment();
-            payment.setOrderId(orderId);
-            payment.setUserId(order.getUserId());
-            payment.setAmount(order.getFinalPrice() == null ? java.math.BigDecimal.ZERO : order.getFinalPrice());
-            payment.setPayMethod(paymentGateway.channel());
-            payment.setStatus(1);
-            payment.setTradeNo(tradeNo);
-            payment.setPayTime(java.time.LocalDateTime.now());
-            paymentMapper.insert(payment);
+            // 查单补偿/回调与同步完成共用本方法：跳转渠道已有"处理中"流水，
+            // 按 tradeNo 升级状态而不是再插一行
+            com.itcast.model.pojo.Payment existed = paymentMapper.selectOne(
+                    new LambdaQueryWrapper<com.itcast.model.pojo.Payment>()
+                            .eq(com.itcast.model.pojo.Payment::getTradeNo, tradeNo)
+                            .eq(com.itcast.model.pojo.Payment::getStatus, 0)
+                            .last("LIMIT 1"));
+            if (existed != null) {
+                com.itcast.model.pojo.Payment paid = new com.itcast.model.pojo.Payment();
+                paid.setId(existed.getId());
+                paid.setStatus(1);
+                paid.setPayTime(java.time.LocalDateTime.now());
+                paymentMapper.updateById(paid);
+            } else {
+                com.itcast.model.pojo.Payment payment = new com.itcast.model.pojo.Payment();
+                payment.setOrderId(orderId);
+                payment.setUserId(order.getUserId());
+                payment.setAmount(order.getFinalPrice() == null ? java.math.BigDecimal.ZERO : order.getFinalPrice());
+                payment.setPayMethod(paymentGateway.channel());
+                payment.setStatus(1);
+                payment.setTradeNo(tradeNo);
+                payment.setPayTime(java.time.LocalDateTime.now());
+                paymentMapper.insert(payment);
+            }
         } catch (Exception e) {
             log.error("支付流水落库失败（不影响订单状态），orderId={}", orderId, e);
         }
@@ -364,6 +393,76 @@ public class OrderServiceImpl implements OrderService {
         }
         completePayment(order, notify.tradeNo());
         return true;
+    }
+
+    /** 查单补偿的回调宽限：发起支付后先等回调，超过此时长才主动向渠道核实 */
+    private static final long RECONCILE_GRACE_MINUTES = 3;
+    /** 渠道确认未支付后的关单时限（与延迟关单一致，15 分钟） */
+    private static final long RECONCILE_CLOSE_MINUTES = 15;
+    /** 每轮补偿扫描的流水条数上限 */
+    private static final int RECONCILE_BATCH = 50;
+
+    /**
+     * 查单补偿：跳转类渠道回调可能丢失，对"处理中"流水主动向渠道核实。
+     * - 渠道已支付 → completePayment（乐观状态机天然幂等，与回调并发安全）
+     * - 渠道未支付且订单超时 → closeOrderIfDue（回补库存）+ 流水置已关闭
+     * 模拟网关下不产生跳转支付（无 status=0 流水），本任务空转；接真实渠道即生效。
+     */
+    @Override
+    public void reconcilePendingPayments() {
+        List<com.itcast.model.pojo.Payment> pendings = paymentMapper.selectList(
+                new LambdaQueryWrapper<com.itcast.model.pojo.Payment>()
+                        .eq(com.itcast.model.pojo.Payment::getStatus, 0)
+                        .orderByDesc(com.itcast.model.pojo.Payment::getId)
+                        .last("LIMIT " + RECONCILE_BATCH));
+        if (pendings == null || pendings.isEmpty()) {
+            return;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        for (com.itcast.model.pojo.Payment pending : pendings) {
+            try {
+                Order order = orderMapper.selectById(pending.getOrderId());
+                // 订单不存在或已非待支付：流水置已关闭，避免反复扫描
+                if (order == null || order.getStatus() == null
+                        || order.getStatus() != OrderStatusEnum.DUE.getCode()) {
+                    closePaymentRecord(pending);
+                    continue;
+                }
+                java.time.Duration sinceCreate = java.time.Duration.between(order.getCreateTime(), now);
+                if (sinceCreate.toMinutes() < RECONCILE_GRACE_MINUTES) {
+                    continue; // 回调宽限期内，等回调
+                }
+                com.itcast.payment.PaymentGateway.PayQueryStatus channelStatus =
+                        paymentGateway.queryPayment(pending.getTradeNo());
+                switch (channelStatus) {
+                    case PAID -> {
+                        log.info("查单补偿：渠道确认已支付，补完成订单，orderId={} tradeNo={}",
+                                order.getId(), pending.getTradeNo());
+                        completePayment(order, pending.getTradeNo());
+                    }
+                    case PENDING -> log.info("查单补偿：渠道处理中，继续等待，orderId={}", order.getId());
+                    case NOT_FOUND -> {
+                        if (sinceCreate.toMinutes() >= RECONCILE_CLOSE_MINUTES) {
+                            log.info("查单补偿：渠道未支付且订单超时，执行关单，orderId={}", order.getId());
+                            closeOrderIfDue(order.getId());
+                            closePaymentRecord(pending);
+                        }
+                        // 未到关单时限的 NOT_FOUND 等下轮（用户可能仍在支付页）
+                    }
+                }
+            } catch (Exception e) {
+                log.error("查单补偿单条处理失败，paymentId={} tradeNo={}",
+                        pending.getId(), pending.getTradeNo(), e);
+            }
+        }
+    }
+
+    /** 流水置已关闭（status=2），退出补偿扫描 */
+    private void closePaymentRecord(com.itcast.model.pojo.Payment pending) {
+        com.itcast.model.pojo.Payment update = new com.itcast.model.pojo.Payment();
+        update.setId(pending.getId());
+        update.setStatus(2);
+        paymentMapper.updateById(update);
     }
 
     @Override

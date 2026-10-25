@@ -37,7 +37,7 @@
           <!-- 商品明细 -->
           <div class="order-items">
             <div v-for="(item, idx) in displayItems(vo)" :key="idx" class="order-item">
-              <img class="item-image" :src="item.productImage || defaultImage" :alt="item.productName" loading="lazy" />
+              <div class="item-image"><SkeletonImage :src="item.productImage || defaultImage" :alt="item.productName" aspect-ratio="1 / 1" /></div>
               <div class="item-info">
                 <p class="item-name">{{ item.productName }}</p>
                 <p v-if="item.attributes" class="item-attrs">{{ item.attributes }}</p>
@@ -89,6 +89,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
+import SkeletonImage from '../components/SkeletonImage.vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
 import { getOrderList, payOrder, type OrderVo, type OrderItem } from '../api/order'
@@ -293,9 +294,10 @@ onMounted(() => {
 .item-image {
   width: 56px;
   height: 56px;
-  border-radius: 8px;
-  object-fit: cover;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
   background: var(--bg-subtle);
+  flex-shrink: 0;
 }
 
 .item-name {

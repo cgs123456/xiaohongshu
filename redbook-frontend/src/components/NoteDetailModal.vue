@@ -12,7 +12,7 @@
           <div v-else class="detail-content">
             <!-- 左侧图片区域 -->
             <div class="image-section">
-              <img :src="noteDetail.note.image || 'https://picsum.photos/800/600?random=0'" :alt="noteDetail.note.title" class="main-image" />
+              <div class="main-image"><SkeletonImage :src="noteDetail.note.image || 'https://picsum.photos/800/600?random=0'" :alt="noteDetail.note.title" :min-height="320" /></div>
             </div>
 
             <!-- 右侧内容区域 -->
@@ -158,11 +158,11 @@
                 <!-- 互动操作按钮（合并统计和操作） -->
                 <div class="action-buttons">
                   <button class="action-btn like-btn" :class="{ active: isLiked }" :disabled="likeLoading" @click="toggleLike">
-                    <Icon :icon="isLiked ? 'lucide:heart' : 'lucide:heart'" width="22" />
+                    <Icon icon="lucide:heart" width="22" class="action-icon" />
                     <span>{{ noteDetail.note.like || 0 }}</span>
                   </button>
                   <button class="action-btn collect-btn" :class="{ active: isCollected }" :disabled="collectLoading" @click="toggleCollect">
-                    <Icon :icon="isCollected ? 'lucide:star' : 'lucide:star'" width="22" />
+                    <Icon icon="lucide:star" width="22" class="action-icon" />
                     <span>{{ noteDetail.note.collection || 0 }}</span>
                   </button>
                   <button class="action-btn comment-btn">
@@ -182,6 +182,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
+import SkeletonImage from './SkeletonImage.vue'
 import DOMPurify from 'dompurify'
 import { getNoteDetail, toggleLike as apiToggleLike, checkIsLiked, toggleCollection as apiToggleCollection, checkIsCollected, type NoteVo } from '../api/note'
 import { getCommentList, getCommentCount, postComment, type CommentVo } from '../api/comment'
@@ -588,8 +589,12 @@ const toggleFollow = async () => {
 
 .main-image {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  display: flex;
+  align-items: flex-start;
+}
+
+.main-image :deep(.skeleton-image) {
+  width: 100%;
 }
 
 /* 右侧内容区域 */
@@ -1041,9 +1046,17 @@ const toggleFollow = async () => {
   background: var(--brand-soft);
 }
 
+.like-btn.active .action-icon {
+  fill: var(--brand);
+}
+
 .action-btn.collect-btn.active {
-  color: #ffa500;
-  background: #fff8e1;
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.collect-btn.active .action-icon {
+  fill: var(--warning);
 }
 
 .action-btn span {

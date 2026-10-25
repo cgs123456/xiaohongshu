@@ -11,7 +11,7 @@
           <div v-else-if="productDetail" class="modal-content">
             <!-- 左侧：商品图片 -->
             <div class="product-image-section">
-              <img :src="productDetail.product.image" :alt="productDetail.product.name" />
+              <SkeletonImage :src="productDetail.product.image" :alt="productDetail.product.name" aspect-ratio="1 / 1" />
             </div>
 
             <!-- 右侧：商品信息 -->
@@ -73,6 +73,7 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { useToast } from '../composables/useToast'
 import { Icon } from '@iconify/vue'
+import SkeletonImage from './SkeletonImage.vue'
 import { getProduct, type ProductVo, type Product, type CustomAttribute } from '../api/product'
 
 interface Props {
@@ -395,6 +396,22 @@ const handleBuyNow = () => {
 
   .action-buttons {
     flex-direction: column;
+  }
+}
+@media (max-width: 600px) {
+  /* 移动端弹窗全屏化（社区/电商惯例），替代居中卡片 */
+  .modal-overlay {
+    padding: 0;
+  }
+
+  .modal-container {
+    max-width: 100%;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    margin: 0;
+    overflow-y: auto;
   }
 }
 </style>

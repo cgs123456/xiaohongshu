@@ -22,6 +22,22 @@ public interface PaymentGateway {
     /** 解析并校验异步回调（验签失败或非支付成功回调返回 failed=true） */
     PayNotifyResult parseNotify(Map<String, String> params);
 
+    /**
+     * 主动查询渠道侧支付结果（对账补偿）：跳转类渠道的异步回调可能丢失，
+     * 定时任务对超时未回调的支付单调用本方法核实，防止"用户已付款但订单停留待支付"。
+     */
+    PayQueryStatus queryPayment(String tradeNo);
+
+    /** 渠道侧支付状态 */
+    enum PayQueryStatus {
+        /** 渠道确认已支付（需补完成订单） */
+        PAID,
+        /** 渠道确认未支付/查无此单（超时后可关单） */
+        NOT_FOUND,
+        /** 渠道处理中（继续等待回调/下轮查单） */
+        PENDING
+    }
+
     /** 渠道标识（落 rb_payment.pay_method） */
     String channel();
 

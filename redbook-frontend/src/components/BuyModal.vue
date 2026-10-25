@@ -593,9 +593,19 @@ const handleCheckoutSuccess = () => {
 
 /* 响应式 */
 @media (max-width: 600px) {
+  /* 移动端弹窗全屏化（社区/电商惯例），替代居中卡片 */
+  .modal-overlay {
+    padding: 0;
+  }
+
   .modal-container {
     max-width: 100%;
-    margin: 0 16px;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    margin: 0;
+    overflow-y: auto;
   }
 }
 </style>

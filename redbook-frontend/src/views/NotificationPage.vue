@@ -93,12 +93,9 @@
               
               <!-- 点赞和收藏类型显示笔记图片和更多按钮 -->
               <div v-if="notification.type === 'like' || notification.type === 'collect'" class="notification-right">
-                <img 
-                  v-if="notification.noteImage" 
-                  :src="notification.noteImage" 
-                  :alt="notification.noteTitle" 
-                  class="note-thumbnail" 
-                />
+                <div v-if="notification.noteImage" class="note-thumbnail">
+                  <SkeletonImage :src="notification.noteImage" :alt="notification.noteTitle" aspect-ratio="1 / 1" />
+                </div>
                 <button class="more-btn">
                   <Icon icon="lucide:ellipsis" width="20" />
                 </button>
@@ -125,6 +122,7 @@ import { Icon } from '@iconify/vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
 import EmptyState from '../components/EmptyState.vue'
+import SkeletonImage from '../components/SkeletonImage.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getLikeList, type LikeVo } from '@/api/note'
 import { withThumb } from '@/utils/image'
@@ -750,8 +748,8 @@ const filteredNotifications = computed(() => {
 .note-thumbnail {
   width: 80px;
   height: 80px;
-  border-radius: 8px;
-  object-fit: cover;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
   flex-shrink: 0;
 }
 

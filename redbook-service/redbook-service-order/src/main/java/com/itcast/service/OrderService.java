@@ -36,6 +36,12 @@ public interface OrderService {
     boolean handlePayNotify(java.util.Map<String, String> params);
 
     /**
+     * 查单补偿：扫描"处理中"支付流水，向渠道核实支付结果——
+     * 已支付则补完成订单（回调丢失场景），未支付且超时则关单回收库存。
+     */
+    void reconcilePendingPayments();
+
+    /**
      * 关单公共逻辑：若订单仍处于待支付状态则取消，回补商品库存并退还优惠券
      * @param orderId 订单ID
      */

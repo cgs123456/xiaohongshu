@@ -18,7 +18,7 @@ const routes: RouteRecordRaw[] = [
         path: '/shopping',
         name: 'Shopping',
         component: () => import('../views/ShoppingPage.vue'),
-        meta: { title: '购物', requiresAuth: true }
+        meta: { title: '购物' }
     },
     {
         path: '/cart',

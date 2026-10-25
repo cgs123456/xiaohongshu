@@ -42,7 +42,7 @@
             @click="viewProduct(product.id)"
           >
             <div class="product-image">
-              <img :src="product.image" :alt="product.name" loading="lazy" />
+              <SkeletonImage :src="product.image" :alt="product.name" aspect-ratio="3 / 4" />
               <div class="product-tag" v-if="getProductTag(product)">{{ getProductTag(product) }}</div>
             </div>
             <div class="product-info">
@@ -102,6 +102,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Icon } from '@iconify/vue'
+import SkeletonImage from '../components/SkeletonImage.vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
 import ProductDetailModal from '../components/ProductDetailModal.vue'
@@ -362,22 +363,11 @@ onUnmounted(() => {
 .product-image {
   position: relative;
   width: 100%;
-  padding-top: 133%;
   overflow: hidden;
-  background: var(--bg-subtle);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
-.product-image img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s;
-}
-
-.product-card:hover .product-image img {
+.product-card:hover .product-image :deep(img) {
   transform: scale(1.05);
 }
 

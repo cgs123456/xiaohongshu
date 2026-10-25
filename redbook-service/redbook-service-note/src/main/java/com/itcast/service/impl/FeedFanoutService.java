@@ -37,6 +37,10 @@ public class FeedFanoutService {
         }
         try {
             push(RedisConstant.FEED_INBOX + authorId, noteId);
+            // 大 V 分级：首页粉丝满页（>= FOLLOWER_PAGE_SIZE）即视为大 V，
+            // 停止推送——写放大随粉丝量线性增长，读侧对收件箱缺失本就有
+            // DB 拉取兜底（GetNoteListByAttention 收件箱不足一页回退查询），
+            // 大 V 内容由拉模式覆盖，普通作者保持推模式的时效性
             int page = 1;
             while (true) {
                 Result<List<Integer>> resp = userClient.getFollowerIds(authorId, page, FOLLOWER_PAGE_SIZE);
@@ -47,6 +51,11 @@ public class FeedFanoutService {
                 // pipeline 批量 LPUSH+LTRIM：每批 2 次网络往返（此前每个粉丝 2 次）
                 pushBatch(followers, noteId);
                 if (followers.size() < FOLLOWER_PAGE_SIZE) {
+                    break;
+                }
+                if (page == 1) {
+                    log.info("大 V 扇出分级：粉丝满首页（>={}），停止推送走读侧拉取，noteId={} authorId={}",
+                            FOLLOWER_PAGE_SIZE, noteId, authorId);
                     break;
                 }
                 page++;

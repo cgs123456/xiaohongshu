@@ -36,7 +36,7 @@ public class Payment {
     /** 渠道交易号（网关回调对账用） */
     private String tradeNo;
 
-    /** 1-成功 0-失败 */
+    /** 0-处理中（跳转渠道发起） 1-成功 2-已关闭（查单补偿关单） */
     private Integer status;
 
     @TableField("pay_time")
