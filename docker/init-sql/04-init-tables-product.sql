@@ -1,4 +1,7 @@
 -- ============================================
+-- 强制本文件以 utf8mb4 会话执行：docker mysql 客户端在 C locale 下
+-- 默认 latin1 会话，曾把种子数据双重编码入库（乱码根因）
+SET NAMES utf8mb4;
 -- 商品服务 rb_product 库
 -- 对齐实体：com.itcast.model.pojo.Product / Shop / Cart / Coupon / UserCoupon / ProductBrowse
 -- ============================================
@@ -86,7 +89,7 @@ CREATE TABLE IF NOT EXISTS rb_user_coupon (
 CREATE TABLE IF NOT EXISTS rb_product_browse (
     product_id INT NOT NULL COMMENT '产品id',
     user_id    INT NOT NULL COMMENT '用户id',
-    UNIQUE KEY uk_user_sku (user_id, sku_id)
+    UNIQUE KEY uk_user_product (user_id, product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品浏览记录表';
 
 -- 种子数据：店铺（归属用户 1）

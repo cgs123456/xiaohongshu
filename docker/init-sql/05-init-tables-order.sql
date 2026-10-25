@@ -1,4 +1,7 @@
 -- ============================================
+-- 强制本文件以 utf8mb4 会话执行：docker mysql 客户端在 C locale 下
+-- 默认 latin1 会话，曾把种子数据双重编码入库（乱码根因）
+SET NAMES utf8mb4;
 -- 订单服务 rb_order 库
 -- 对齐实体：com.itcast.model.pojo.Order / OrderAttribute / OrderItem / Payment
 -- ============================================
@@ -33,6 +36,7 @@ CREATE TABLE IF NOT EXISTS rb_order_item (
     id            BIGINT        AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     order_id      BIGINT        NOT NULL COMMENT '订单id',
     product_id    INT           NOT NULL COMMENT '商品id',
+    sku_id        INT           DEFAULT NULL COMMENT '规格id（SKU 库存扣减口径；历史订单为 NULL，关单回补走 productId 兜底）',
     product_name  VARCHAR(100)  DEFAULT '' COMMENT '商品名称快照',
     product_image VARCHAR(500)  DEFAULT '' COMMENT '商品图片快照',
     unit_price    DECIMAL(10,2) DEFAULT 0.00 COMMENT '成交单价快照',

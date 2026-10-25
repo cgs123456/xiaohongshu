@@ -82,9 +82,12 @@ fi
 
 # 8. 发布笔记（multipart：接口要求 image 文件必传）
 step "postNote"
+# 标题/内容经 UTF-8 文件传给 curl（<file 语法字节保真），避免 Windows 控制台 GBK 双重编码
+printf 'E2E 测试笔记' > .run/note-title.txt
+printf '端到端验证发布链路，包含话题 周末去哪儿' > .run/note-content.txt
 printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0aIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB\x60\x82' > .run/test.png
 curl -s -m 40 -X POST "$GW/note/postNote" -H "token: $TOKEN" \
-  -F "image=@.run/test.png;type=image/png" -F "title=E2E 测试笔记" -F "content=端到端验证发布链路，包含话题 周末去哪儿" -F "longitude=121.5221" -F "latitude=31.2645" >> "$OUT"; echo >> "$OUT"
+  -F "image=@.run/test.png;type=image/png" -F "title=<.run/note-title.txt" -F "content=<.run/note-content.txt" -F "longitude=121.5221" -F "latitude=31.2645" >> "$OUT"; echo >> "$OUT"
 
 # 9. 首页列表应包含新笔记
 step "noteList contains new note"
