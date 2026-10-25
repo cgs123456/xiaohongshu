@@ -21,7 +21,6 @@ import com.itcast.strategy.GetNotesStrategy;
 import com.itcast.strategy.NoteStrategyContext;
 import com.itcast.strategy.NoteStrategyFactory;
 import com.itcast.strategy.NoteStrategyType;
-import com.itcast.util.BloomFilterUtil;
 import com.itcast.util.DealTimeUtil;
 import com.itcast.util.DiffDayUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -81,9 +80,6 @@ public class NoteServiceImpl implements NoteService {
     private RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
-    private BloomFilterUtil bloomFilterUtil;
-
-    @Autowired
     private CommentClient commentClient;
 
     @Autowired
@@ -128,14 +124,8 @@ public class NoteServiceImpl implements NoteService {
         noteVo.setUser(user);
         noteVo.setComment(commentCount);
 
-        // 6.加入布隆过滤器
+        // 6.记录用户访问笔记：(user_id, note_id) 唯一索引，重复浏览捕获 DuplicateKeyException 静默处理
         Integer loginUserId = UserContext.getUserId();
-        if (loginUserId != null) {
-            threadPoolTaskExecutor.execute(() ->
-                    bloomFilterUtil.add(RedisConstant.USER_BLOOM_FILTER + loginUserId, noteId.toString()));
-        }
-
-        // 7.记录用户访问笔记：(user_id, note_id) 唯一索引，重复浏览捕获 DuplicateKeyException 静默处理
         if (loginUserId != null) {
             try {
                 NoteBrowse noteBrowse = new NoteBrowse();

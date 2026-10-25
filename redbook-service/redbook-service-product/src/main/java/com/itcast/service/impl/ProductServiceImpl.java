@@ -245,9 +245,11 @@ public class ProductServiceImpl implements ProductService {
         buyDto.setProductId(sku.getProductId());
 
         // 0.5 用户级请求幂等（防双击/重放）：userId+skuId 5 秒去重窗口。
-        // 消息级 messageId 幂等只能防 broker 重投，防不了同一用户连发两次请求
-        if (buyDto.getUserId() != null) {
-            String requestKey = "buy:idem:" + buyDto.getUserId() + ":" + sku.getId();
+        // 消息级 messageId 幂等只能防 broker 重投，防不了同一用户连发两次请求；
+        // 失败路径会删除该键（见下方各失败分支），成功的请求由 TTL 自然过期
+        String requestKey = buyDto.getUserId() == null ? null
+                : "buy:idem:" + buyDto.getUserId() + ":" + sku.getId();
+        if (requestKey != null) {
             Boolean first = redisTemplate.opsForValue().setIfAbsent(requestKey, "1", 5, TimeUnit.SECONDS);
             if (Boolean.FALSE.equals(first)) {
                 return Result.failure("请勿重复提交，请稍后再试");
@@ -257,7 +259,10 @@ public class ProductServiceImpl implements ProductService {
         // 1&3.Redis Lua 原子扣减（含预热，与结算链路共用，SKU 级）
         Long result = deductRedisStockInternal(sku.getId(), quantity);
         if (result == null || result < 0) {
-            // -1库存不足 / -2 SKU不存在，统一按库存不足处理
+            // -1库存不足 / -2 SKU不存在，统一按库存不足处理；失败的请求立即释放幂等键
+            if (requestKey != null) {
+                redisTemplate.delete(requestKey);
+            }
             return Result.failure("库存不足");
         }
 
@@ -296,6 +301,9 @@ public class ProductServiceImpl implements ProductService {
                             buyDto.getProductId(), quantity, ex);
                 }
             }
+            if (requestKey != null) {
+                redisTemplate.delete(requestKey);
+            }
             return Result.failure("系统繁忙，下单失败，已自动恢复库存，请稍后重试");
         }
 
@@ -308,19 +316,6 @@ public class ProductServiceImpl implements ProductService {
             msg.getMessageProperties().setMessageId(java.util.UUID.randomUUID().toString());
             return msg;
         };
-    }
-
-    @Override
-    public Result<String> buyProduct(String message) {
-        // 旧接口：单轮购物咨询（无对话上下文），委托给 ShoppingAgentService
-        try {
-            log.info("用户 {} 购物咨询: {}", UserContext.getUserId(), message);
-            String reply = shoppingAgentService.chat(null, message);
-            return Result.success(reply);
-        } catch (Exception e) {
-            log.error("Agent 处理失败", e);
-            return Result.failure("Agent 处理失败：" + e.getMessage());
-        }
     }
 
     @Override

@@ -84,6 +84,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                     .collect(java.util.stream.Collectors.toList());
         }
         if (carts.isEmpty()) {
+            redisTemplate.delete(idemKey);
             return Result.failure("购物车为空");
         }
 
@@ -104,19 +105,19 @@ public class CheckoutServiceImpl implements CheckoutService {
             int quantity = cart.getQuantity() == null || cart.getQuantity() < 1 ? 1 : cart.getQuantity();
             Product product = productMap.get(cart.getProductId());
             if (product == null) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure("商品不存在或已下架：" + cart.getProductName());
             }
             com.itcast.model.pojo.Sku sku = cart.getSkuId() != null
                     ? productService.getSkuById(cart.getSkuId())
                     : productService.resolveSku(cart.getProductId(), null);
             if (sku == null) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure("规格不存在或已下架：" + cart.getProductName());
             }
             long remain = productService.deductRedisStock(sku.getId(), quantity);
             if (remain < 0) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure("库存不足：" + product.getName()
                         + (cart.getAttributes() == null || cart.getAttributes().isEmpty() ? "" : "（" + cart.getAttributes() + "）"));
             }
@@ -142,17 +143,17 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (dto.getCouponId() != null) {
             Coupon coupon = couponMapper.selectById(dto.getCouponId());
             if (coupon == null) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure("优惠券不存在");
             }
             if (coupon.getStock() == null || coupon.getStock() <= 0
                     || IsExpireUtil.isExpire(coupon.getStartTime(), coupon.getEndTime())) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure("优惠券已失效");
             }
             BigDecimal minAmount = coupon.getMinAmount() == null ? BigDecimal.ZERO : coupon.getMinAmount();
             if (total.compareTo(minAmount) < 0) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure("订单总价未满足券的使用门槛（满 " + minAmount.stripTrailingZeros().toPlainString() + " 可用）");
             }
             try {
@@ -160,7 +161,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 discount = coupon.getDiscount() == null ? BigDecimal.ZERO : coupon.getDiscount();
                 couponUsed = true;
             } catch (Exception e) {
-                rollbackRedisStock(deducted);
+                rollbackRedisStock(deducted, idemKey);
                 return Result.failure(e.getMessage() != null ? e.getMessage() : "优惠券使用失败");
             }
         }
@@ -203,7 +204,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         } catch (Exception e) {
             log.error("结算消息发送失败，开始补偿，userId={}", userId, e);
             // 回补 Redis 扣减
-            rollbackRedisStock(deducted);
+            rollbackRedisStock(deducted, idemKey);
             // 已发出的 MySQL 扣减消息无法撤回，补发 restore 消息回滚
             if (anyStockMsgSent) {
                 for (CheckoutOrderDto.CheckoutItem item : items) {
@@ -254,9 +255,16 @@ public class CheckoutServiceImpl implements CheckoutService {
         return Result.success("下单成功，请在 15 分钟内完成支付");
     }
 
-    private void rollbackRedisStock(List<int[]> deducted) {
+    /**
+     * 失败收口：回补已扣的 Redis 库存，并释放请求级幂等键——
+     * 失败的请求不该占用 5 秒防重窗口，否则用户改完问题立即重试仍被"请勿重复提交"挡住
+     */
+    private void rollbackRedisStock(List<int[]> deducted, String idemKey) {
         for (int[] pair : deducted) {
             productService.restoreRedisStock(pair[0], pair[1]);
+        }
+        if (idemKey != null) {
+            redisTemplate.delete(idemKey);
         }
     }
 

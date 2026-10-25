@@ -60,21 +60,6 @@ public class ProductController {
         return productService.updateProduct(productDto);
     }
 
-    @PostMapping("/buyProduct")
-    public Result<Void> buyProduct(@RequestBody BuyDto buyDto) {
-        if (buyDto.getProductId() == null) {
-            return Result.failure("商品ID不能为空");
-        }
-        // 强制使用登录态中的userId，防止客户端伪造
-        buyDto.setUserId(UserContext.getUserId());
-        return productService.buyProduct(buyDto);
-    }
-
-    @PostMapping("/agent/buyProduct")
-    public Result<String> agentBuyProduct(@RequestBody String message) {
-        return productService.buyProduct(message);
-    }
-
     /**
      * 购物 Agent 多轮对话端点（支持 conversationId 维持上下文）
      * 请求体示例：{"conversationId":"abc123","message":"帮我买那个红色的"}

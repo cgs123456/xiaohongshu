@@ -4,13 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.itcast.client.ProductClient;
 import com.itcast.enums.OrderStatusEnum;
 import com.itcast.exception.DuplicateMessageException;
-import com.itcast.mapper.OrderAttributeMapper;
 import com.itcast.mapper.OrderMapper;
 import com.itcast.model.dto.OrderDelayMessage;
 import com.itcast.model.dto.OrderDto;
 import com.itcast.model.pojo.CustomAttribute;
 import com.itcast.model.pojo.Order;
-import com.itcast.model.pojo.OrderAttribute;
 import com.itcast.model.pojo.Product;
 import com.itcast.result.Result;
 import com.itcast.service.OrderService;
@@ -40,9 +38,6 @@ public class OrderServiceImpl implements OrderService {
 
     @Autowired
     private ProductClient productClient;
-
-    @Autowired
-    private OrderAttributeMapper orderAttributeMapper;
 
     @Autowired
     private com.itcast.mapper.OrderItemMapper orderItemMapper;
@@ -192,38 +187,33 @@ public class OrderServiceImpl implements OrderService {
         order.setFinalPrice(java.math.BigDecimal.valueOf(product.getPrice()));
         orderMapper.insert(order);
 
-        // 保存订单属性
+        // 保存订单明细（含快照）：直购与结算路径统一数据模型，明细是关单回补/展示的唯一事实源。
+        // 此前直购只写主表+OrderAttribute（后者无任何读取方，纯死写已删），且主表无 sku_id——
+        // 超时关单只能按 productId 回补默认 SKU，买 M 码回补 S 码的库存错位由此而来
         Long orderId = order.getId();
         if (orderId == null) {
             throw new IllegalStateException("订单ID生成失败");
         }
 
+        com.itcast.model.pojo.OrderItem orderItem = new com.itcast.model.pojo.OrderItem();
+        orderItem.setOrderId(orderId);
+        orderItem.setProductId(order.getProductId());
+        orderItem.setSkuId(orderDto.getSkuId());
+        orderItem.setProductName(product.getName());
+        orderItem.setProductImage(product.getImage());
+        orderItem.setUnitPrice(order.getFinalPrice());
+        orderItem.setQuantity(order.getQuantity());
+        // 规格快照 "label:value; label:value"（与结算路径格式一致）
         List<CustomAttribute> selectAttributes = orderDto.getSelectAttributes();
         if (selectAttributes != null && !selectAttributes.isEmpty()) {
-            List<OrderAttribute> attributes = new java.util.ArrayList<>();
-            for (CustomAttribute selectAttribute : selectAttributes) {
-                if (selectAttribute == null) {
-                    log.warn("订单属性为空，跳过");
-                    continue;
-                }
-
-                List<String> values = selectAttribute.getValue();
-                if (values == null || values.isEmpty()) {
-                    log.warn("订单属性值为空，跳过属性：{}", selectAttribute.getLabel());
-                    continue;
-                }
-
-                OrderAttribute orderAttribute = new OrderAttribute();
-                orderAttribute.setOrderId(orderId);
-                orderAttribute.setLabel(selectAttribute.getLabel());
-                orderAttribute.setValue(values.get(0));
-                attributes.add(orderAttribute);
-            }
-            // 先收集后插入（Mapper 无 saveBatch，仍逐条；此处量级为单品属性个数，可接受）
-            if (!attributes.isEmpty()) {
-                attributes.forEach(orderAttributeMapper::insert);
-            }
+            String attributesText = selectAttributes.stream()
+                    .filter(a -> a != null && a.getValue() != null && !a.getValue().isEmpty()
+                            && a.getLabel() != null)
+                    .map(a -> a.getLabel() + ":" + a.getValue().get(0))
+                    .collect(java.util.stream.Collectors.joining("; "));
+            orderItem.setAttributes(attributesText.isEmpty() ? null : attributesText);
         }
+        orderItemMapper.insert(orderItem);
 
         // 延迟关单消息必须在事务提交后发送：事务内发送若回滚会产生孤儿关单消息
         OrderDelayMessage delayMessage = new OrderDelayMessage();

@@ -31,7 +31,6 @@ public interface ProductService {
 
     Result<Void> buyProduct(BuyDto buyDto);
 
-    Result<String> buyProduct(String message);
 
     /**
      * Agent 多轮对话（支持 conversationId 维持上下文）

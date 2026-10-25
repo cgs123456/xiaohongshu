@@ -7,9 +7,9 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 购物车结算下单消息（product → order，RabbitMQ JDK 序列化）。
- * 注意：order 服务持有本类的完全相同副本（字段与 serialVersionUID 必须一致），
- * 任一侧改字段需同步另一侧（历史遗留的 JDK 序列化约定，统一 JSON 序列化前维持现状）。
+ * 购物车结算下单消息（product → order，Jackson 序列化）。
+ * 下沉 redbook-common 单一副本（此前 product/order 双副本需人工保持同步）。
+ * 包名保持 com.itcast.model.dto 不变，__TypeId__ 全限定名兼容在途消息。
  */
 @Data
 public class CheckoutOrderDto implements Serializable {

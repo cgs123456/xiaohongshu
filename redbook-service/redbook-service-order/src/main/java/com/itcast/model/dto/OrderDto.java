@@ -16,6 +16,11 @@ public class OrderDto implements Serializable {
     private Integer productId;
 
     /**
+     * 规格id（库存扣减口径；直购消息发前已在 product 侧解析，永不为空）
+     */
+    private Integer skuId;
+
+    /**
      * 产品价格
      */
     private BigDecimal price;

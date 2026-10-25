@@ -8,7 +8,6 @@ public class RedisConstant {
     public static final String NOTE_SCORE = "redbook:note:note_score:";
     public static final String LIKE_SET_CACHE = "redbook:note:like_set_cache:";
     public static final String COLLECTION_SET_CACHE = "redbook:note:collection_set_cache:";
-    public static final String USER_BLOOM_FILTER = "redbook:note:user_bloom_filter:";
     public static final String PRODUCT_STOCK_CACHE = "redbook:product:stock:cache:";
     /** SKU 级库存缓存 key（库存分规格后的唯一扣减口径），完整 key: 前缀 + skuId */
     public static final String PRODUCT_SKU_STOCK_CACHE = "redbook:product:sku_stock:cache:";

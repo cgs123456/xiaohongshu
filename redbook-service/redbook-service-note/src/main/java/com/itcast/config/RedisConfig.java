@@ -2,6 +2,8 @@ package com.itcast.config;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ser.std.NumberSerializer;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +32,13 @@ public class RedisConfig {
         ObjectMapper mapper = springMapper.copy();
         mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance,
                 ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
+        // 剥离 HTTP 层的 Long->String 契约定制（JacksonTimeFormatConfig 为前端精度
+        // 把 Long 序列化成带引号字符串）：Redis 是内部存储不是 API 响应，带引号的
+        // Long 会作为 Lua 脚本参数（setbit/lpush）写坏或作为集合值存成脏数据。
+        // 恢复裸数字后，脚本参数与值均回到合法形态
+        mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
+                .addSerializer(Long.class, NumberSerializer.instance)
+                .addSerializer(Long.TYPE, NumberSerializer.instance));
         GenericJackson2JsonRedisSerializer jsonRedisSerializer = new GenericJackson2JsonRedisSerializer(mapper);
 
         template.setKeySerializer(RedisSerializer.string());

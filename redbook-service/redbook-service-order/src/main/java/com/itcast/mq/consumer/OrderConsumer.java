@@ -55,6 +55,7 @@ public class OrderConsumer {
 
         OrderDto orderDto = new OrderDto();
         orderDto.setProductId(buyDto.getProductId());
+        orderDto.setSkuId(buyDto.getSkuId());
         orderDto.setSelectAttributes(buyDto.getSelectAttributes());
         orderDto.setUserId(buyDto.getUserId());
         orderDto.setQuantity(buyDto.getQuantity());
