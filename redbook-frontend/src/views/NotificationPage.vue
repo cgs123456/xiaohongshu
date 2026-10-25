@@ -13,7 +13,7 @@
         <div class="notification-content">
           <!-- WebSocket 连接状态 -->
           <div class="connection-status" v-if="!isConnected">
-            <Icon icon="mdi:wifi-off" width="16" />
+            <Icon icon="lucide:wifi-off" width="16" />
             <span>消息服务未连接，正在重连...</span>
           </div>
           
@@ -32,8 +32,14 @@
 
           <!-- 通知列表 -->
           <div class="notification-list">
-            <div 
-              v-for="notification in filteredNotifications" 
+            <EmptyState
+              v-if="filteredNotifications.length === 0"
+              icon="lucide:bell"
+              title="暂无新消息"
+              :description="isConnected ? '有新的互动时会第一时间通知你' : '连接消息服务后即可接收新通知'"
+            />
+            <div
+              v-for="notification in filteredNotifications"
               :key="notification.id"
               class="notification-item"
               :class="{ 'like-collect-item': notification.type === 'like' || notification.type === 'collect' }"
@@ -46,8 +52,8 @@
                   <div class="like-collect-content">
                     <div class="user-action">
                       <span class="username">{{ notification.username }}</span>
-                      <Icon v-if="notification.type === 'like'" icon="mdi:heart" width="14" class="action-icon like-icon" />
-                      <Icon v-else icon="mdi:star" width="14" class="action-icon collect-icon" />
+                      <Icon v-if="notification.type === 'like'" icon="lucide:heart" width="14" class="action-icon like-icon" />
+                      <Icon v-else icon="lucide:star" width="14" class="action-icon collect-icon" />
                     </div>
                     <div class="action-with-time">
                       <span class="action-text">{{ notification.content }}</span>
@@ -75,11 +81,11 @@
                   
                   <div class="notification-actions">
                     <button class="action-btn-reply">
-                      <Icon icon="mdi:reply" width="16" />
+                      <Icon icon="lucide:reply" width="16" />
                       回复
                     </button>
                     <button class="action-btn-like">
-                      <Icon icon="mdi:heart-outline" width="16" />
+                      <Icon icon="lucide:heart" width="16" />
                     </button>
                   </div>
                 </template>
@@ -94,7 +100,7 @@
                   class="note-thumbnail" 
                 />
                 <button class="more-btn">
-                  <Icon icon="mdi:dots-horizontal" width="20" />
+                  <Icon icon="lucide:ellipsis" width="20" />
                 </button>
               </div>
               
@@ -102,7 +108,7 @@
               <div v-else class="notification-right">
                 <span class="time">{{ notification.time }}</span>
                 <button class="more-btn">
-                  <Icon icon="mdi:dots-horizontal" width="20" />
+                  <Icon icon="lucide:ellipsis" width="20" />
                 </button>
               </div>
             </div>
@@ -118,6 +124,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Icon } from '@iconify/vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
+import EmptyState from '../components/EmptyState.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getLikeList, type LikeVo } from '@/api/note'
 import { withThumb } from '@/utils/image'
@@ -472,7 +479,7 @@ const filteredNotifications = computed(() => {
 .notification-page {
   min-width: 1000px;
   min-height: 100vh;
-  background: #fafafa;
+  background: var(--bg-page);
 }
 
 /* 主内容区 */
@@ -491,7 +498,7 @@ const filteredNotifications = computed(() => {
 
 /* 通知内容 */
 .notification-content {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -520,17 +527,17 @@ const filteredNotifications = computed(() => {
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   position: relative;
   transition: all 0.2s;
 }
 
 .tab-item:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .tab-item.active {
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -542,7 +549,7 @@ const filteredNotifications = computed(() => {
   transform: translateX(-50%);
   width: 40px;
   height: 3px;
-  background: #ff2442;
+  background: var(--brand);
   border-radius: 2px 2px 0 0;
 }
 
@@ -585,12 +592,12 @@ const filteredNotifications = computed(() => {
 .username {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .notification-body {
@@ -599,14 +606,14 @@ const filteredNotifications = computed(() => {
 
 .notification-text {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.6;
   margin: 0 0 8px 0;
 }
 
 .note-reference {
   font-size: 13px;
-  color: #999;
+  color: var(--text-tertiary);
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -640,7 +647,7 @@ const filteredNotifications = computed(() => {
 }
 
 .like-icon {
-  color: #ff2442;
+  color: var(--brand);
 }
 
 .collect-icon {
@@ -649,7 +656,7 @@ const filteredNotifications = computed(() => {
 
 .action-text {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0;
   text-align: left;
 }
@@ -666,7 +673,7 @@ const filteredNotifications = computed(() => {
 
 .action-with-time .time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
@@ -686,7 +693,7 @@ const filteredNotifications = computed(() => {
 
 .notification-right .time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
@@ -699,7 +706,7 @@ const filteredNotifications = computed(() => {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: #999;
+  color: var(--text-tertiary);
   transition: color 0.2s;
   display: flex;
   align-items: center;
@@ -707,7 +714,7 @@ const filteredNotifications = computed(() => {
 }
 
 .more-btn:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .notification-actions {
@@ -721,23 +728,23 @@ const filteredNotifications = computed(() => {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border-default);
   border-radius: 16px;
-  background: white;
+  background: var(--bg-surface);
   cursor: pointer;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
 .action-btn-reply:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .action-btn-like:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .note-thumbnail {

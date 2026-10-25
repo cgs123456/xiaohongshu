@@ -52,9 +52,9 @@ const { toastVisible, toastMessage, toastType } = useToast()
 }
 
 .toast-container.info {
-  background: #fff0f0;
+  background: var(--brand-soft);
   border: 1px solid #ffa39e;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 .toast-icon {

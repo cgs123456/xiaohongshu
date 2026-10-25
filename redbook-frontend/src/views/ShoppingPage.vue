@@ -27,11 +27,11 @@
       <!-- 商品网格 -->
       <div class="products-container">
         <div v-if="loading && products.length === 0" class="loading-container">
-          <Icon icon="mdi:loading" class="loading-icon" width="48" />
+          <Icon icon="lucide:loader-circle" class="loading-icon" width="48" />
           <p>加载中...</p>
         </div>
         <div v-else-if="products.length === 0" class="empty-container">
-          <Icon icon="mdi:package-variant" width="64" />
+          <Icon icon="lucide:package" width="64" />
           <p>暂无商品</p>
         </div>
         <div v-else class="products-grid">
@@ -56,7 +56,7 @@
                 </div>
                 <div class="product-stats">
                   <span class="stat-item">
-                    <Icon icon="mdi:cart-outline" width="14" />
+                    <Icon icon="lucide:shopping-cart" width="14" />
                     {{ formatNumber(product.sales) }}
                   </span>
                 </div>
@@ -87,7 +87,7 @@
 
     <!-- 购物助手浮动按钮 -->
     <button class="assistant-fab" @click="showAssistant = true">
-      <Icon icon="mdi:robot" width="28" />
+      <Icon icon="lucide:bot" width="28" />
       <span class="fab-text">购物助手</span>
     </button>
 
@@ -114,7 +114,7 @@ const { showToast } = useToast()
 
 // 分类数据
 const categories = ref([
-  { id: 'all', name: '全部', icon: 'mdi:fire' },
+  { id: 'all', name: '全部', icon: 'lucide:flame' },
   { id: 'beauty', name: '美妆护肤', icon: '' },
   { id: 'fashion', name: '服饰鞋包', icon: '' },
   { id: 'digital', name: '数码家电', icon: '' },
@@ -272,7 +272,7 @@ onUnmounted(() => {
 <style scoped>
 .shopping-page {
   min-height: 100vh;
-  background: #f8f8f8;
+  background: var(--bg-page);
 }
 
 .main-content {
@@ -286,8 +286,8 @@ onUnmounted(() => {
 .category-nav {
   position: sticky;
   top: 64px;
-  background: white;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
   z-index: 90;
   padding: 0 24px;
 }
@@ -311,10 +311,10 @@ onUnmounted(() => {
   gap: 4px;
   padding: 8px 16px;
   border: none;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   border-radius: 20px;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
@@ -322,11 +322,11 @@ onUnmounted(() => {
 
 .category-item:hover {
   background: #ebebeb;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .category-item.active {
-  background: #ff2442;
+  background: var(--brand);
   color: white;
   font-weight: 500;
 }
@@ -346,7 +346,7 @@ onUnmounted(() => {
 
 /* 商品卡片 */
 .product-card {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -364,7 +364,7 @@ onUnmounted(() => {
   width: 100%;
   padding-top: 133%;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 
 .product-image img {
@@ -400,7 +400,7 @@ onUnmounted(() => {
 .product-title {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 6px 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -409,7 +409,7 @@ onUnmounted(() => {
 
 .product-desc {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   margin: 0 0 8px 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -418,8 +418,8 @@ onUnmounted(() => {
 
 .product-brand {
   font-size: 11px;
-  color: #666;
-  background: #f5f5f5;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
   padding: 2px 8px;
   border-radius: 4px;
   display: inline-block;
@@ -440,19 +440,19 @@ onUnmounted(() => {
 
 .price-symbol {
   font-size: 12px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
 .price-value {
   font-size: 18px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 700;
 }
 
 .price-original {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   text-decoration: line-through;
 }
 
@@ -466,7 +466,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 /* 加载和空状态 */
@@ -477,12 +477,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 80px 20px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .loading-icon {
   animation: spin 1s linear infinite;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 @keyframes spin {
@@ -495,7 +495,7 @@ onUnmounted(() => {
 }
 
 .empty-container {
-  color: #ccc;
+  color: var(--text-disabled);
 }
 
 .empty-container p,

@@ -17,7 +17,7 @@
             :class="['category-item', { active: activeCategory === category }]"
             @click="switchCategory(category)"
           >
-            <Icon v-if="category === '推荐'" icon="mdi:fire" width="16" />
+            <Icon v-if="category === '推荐'" icon="lucide:flame" width="16" />
             {{ category }}
           </button>
         </div>
@@ -25,35 +25,47 @@
 
       <!-- 瀑布流笔记列表 -->
       <div class="waterfall-container">
-        <div v-if="loading && notes.length === 0" class="loading-container">
-          <Icon icon="mdi:loading" class="loading-icon" width="48" />
-          <p>加载中...</p>
+        <!-- 首屏骨架：与真实卡片同构，避免加载闪跳 -->
+        <div v-if="loading && notes.length === 0" class="waterfall-columns" aria-hidden="true">
+          <div class="waterfall-column" v-for="col in 4" :key="col">
+            <div class="note-card note-card--skeleton" v-for="n in 3" :key="n">
+              <div class="skeleton-block" :style="{ height: ((col * 7 + n * 13) % 4) * 30 + 330 + 'px' }"></div>
+              <div class="note-content">
+                <div class="skeleton-line" style="width: 92%"></div>
+                <div class="skeleton-line" style="width: 58%"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div v-else-if="loadFailed && notes.length === 0" class="empty-container">
-          <Icon icon="mdi:wifi-off" width="64" />
-          <p>加载失败，请检查网络后重试</p>
-          <button class="retry-btn" @click="retryLoad">重新加载</button>
-        </div>
+        <EmptyState
+          v-else-if="loadFailed && notes.length === 0"
+          variant="error"
+          title="加载失败"
+          description="网络似乎不太顺畅，请检查后重试"
+          action-text="重新加载"
+          @action="retryLoad"
+        />
 
-        <div v-else-if="notes.length === 0" class="empty-container">
-          <Icon icon="mdi:note-text-outline" width="64" />
-          <p>暂无内容</p>
-        </div>
+        <EmptyState
+          v-else-if="notes.length === 0"
+          icon="lucide:sticky-note"
+          title="这里还没有内容"
+          description="换个分类看看，或发布第一篇笔记"
+        />
 
         <div v-else class="waterfall-columns">
           <div class="waterfall-column" v-for="(column, index) in columns" :key="index">
             <div class="note-card" v-for="note in column" :key="note.id" @click="openNoteDetail(note)">
               <div class="note-image-wrapper">
-                <img 
-                  :src="note.image" 
-                  :alt="note.title" 
-                  class="note-image" 
-                  loading="lazy"
+                <SkeletonImage
+                  :src="note.image"
+                  :alt="note.title"
+                  :aspect-ratio="`300 / ${note.height}`"
                 />
                 <div class="image-overlay">
                   <span v-if="note.tag" class="note-tag">
-                    <Icon icon="mdi:tag" width="12" />
+                    <Icon icon="lucide:tag" width="12" />
                     {{ note.tag }}
                   </span>
                 </div>
@@ -67,7 +79,7 @@
                   </div>
                   <div class="note-actions">
                     <span class="like-count">
-                      <Icon icon="mdi:heart-outline" width="16" />
+                      <Icon icon="lucide:heart" width="16" />
                       {{ note.likes }}
                     </span>
                   </div>
@@ -76,6 +88,10 @@
             </div>
           </div>
         </div>
+
+        <!-- 追加加载指示（滚动触底时） -->
+        <UiSpinner v-if="loading && notes.length > 0" :size="20" label="加载更多…" />
+        <p v-else-if="!hasMore && notes.length > 0" class="no-more">— 已经到底啦 —</p>
       </div>
     </main>
 
@@ -101,6 +117,9 @@ import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
 import LoginModal from '../components/LoginModal.vue'
 import NoteDetailModal from '../components/NoteDetailModal.vue'
+import SkeletonImage from '../components/SkeletonImage.vue'
+import EmptyState from '../components/EmptyState.vue'
+import UiSpinner from '../components/UiSpinner.vue'
 import { getNoteList, type NoteVo } from '../api/note'
 import { useToast } from '../composables/useToast'
 
@@ -358,7 +377,7 @@ onUnmounted(() => {
 /* 全局样式 */
 .home-page {
   min-height: 100vh;
-  background: linear-gradient(to bottom, #fafafa 0%, #f5f5f5 100%);
+  background: var(--bg-page);
 }
 
 /* 主内容区 */
@@ -372,12 +391,11 @@ onUnmounted(() => {
 .category-nav {
   position: sticky;
   top: 64px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 16px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-subtle);
   z-index: 50;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .category-scroll {
@@ -400,7 +418,7 @@ onUnmounted(() => {
   white-space: nowrap;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -410,14 +428,14 @@ onUnmounted(() => {
 }
 
 .category-item:hover {
-  background: #f7f7f7;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .category-item.active {
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  background: var(--brand-grad);
   color: white;
-  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.2);
+  box-shadow: var(--shadow-brand);
 }
 
 /* 瀑布流容器 */
@@ -427,58 +445,46 @@ onUnmounted(() => {
   padding: 24px;
 }
 
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #999;
+.no-more {
+  text-align: center;
+  padding: 24px 0 32px;
+  font-size: 13px;
+  color: var(--text-disabled);
 }
 
-.empty-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-  color: #999;
+/* 首屏骨架卡片 */
+.note-card--skeleton {
+  cursor: default;
+  pointer-events: none;
 }
 
-.empty-container p {
-  margin-top: 16px;
-  font-size: 14px;
+.skeleton-block {
+  width: 100%;
+  border-radius: 0;
+  background: linear-gradient(100deg, var(--bg-subtle) 40%, var(--bg-hover) 50%, var(--bg-subtle) 60%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
 }
 
-.retry-btn {
-  margin-top: 16px;
-  padding: 8px 28px;
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
-  color: white;
-  border: none;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s;
+.skeleton-line {
+  height: 13px;
+  border-radius: var(--radius-xs);
+  margin-bottom: 10px;
+  background: linear-gradient(100deg, var(--bg-subtle) 40%, var(--bg-hover) 50%, var(--bg-subtle) 60%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
 }
 
-.retry-btn:hover {
-  opacity: 0.85;
-}
-
-.loading-icon {
-  animation: spin 1s linear infinite;
-  color: #ff2442;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
+@keyframes skeleton-shimmer {
   to {
-    transform: rotate(360deg);
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block,
+  .skeleton-line {
+    animation: none;
   }
 }
 
@@ -496,34 +502,34 @@ onUnmounted(() => {
 
 /* 笔记卡片 */
 .note-card {
-  background: white;
-  border-radius: 16px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  box-shadow: var(--shadow-sm);
 }
 
 .note-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
 }
 
 .note-image-wrapper {
   position: relative;
   width: 100%;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 
 .note-image {
   width: 100%;
   display: block;
   object-fit: cover;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--dur-slow) var(--ease-out);
 }
 
-.note-card:hover .note-image {
+.note-card:hover :deep(.skeleton-image__img) {
   transform: scale(1.08);
 }
 
@@ -550,7 +556,7 @@ onUnmounted(() => {
   border-radius: 16px;
   font-size: 12px;
   font-weight: 600;
-  color: #ff2442;
+  color: var(--brand);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -561,7 +567,7 @@ onUnmounted(() => {
 .note-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   line-height: 1.5;
   margin-bottom: 12px;
   display: -webkit-box;
@@ -591,13 +597,13 @@ onUnmounted(() => {
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #f5f5f5;
+  border: 2px solid var(--bg-subtle);
   flex-shrink: 0;
 }
 
 .author-name {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -615,12 +621,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #999;
+  color: var(--text-tertiary);
   transition: color 0.2s;
 }
 
 .note-card:hover .like-count {
-  color: #ff2442;
+  color: var(--brand);
 }
 
 /* 响应式设计 */

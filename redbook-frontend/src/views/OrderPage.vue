@@ -8,20 +8,20 @@
 
       <!-- 加载态（首屏） -->
       <div v-if="loading && orders.length === 0" class="loading-container">
-        <Icon icon="mdi:loading" class="loading-icon" width="48" />
+        <Icon icon="lucide:loader-circle" class="loading-icon" width="48" />
         <p>加载中...</p>
       </div>
 
       <!-- 空状态 -->
       <div v-else-if="orders.length === 0 && !loadFailed" class="empty-container">
-        <Icon icon="mdi:file-document-outline" width="64" />
+        <Icon icon="lucide:file-text" width="64" />
         <p>暂无订单，去逛逛吧</p>
         <button class="go-shopping-btn" @click="router.push('/shopping')">去购物</button>
       </div>
 
       <!-- 错误态 -->
       <div v-else-if="loadFailed && orders.length === 0" class="empty-container">
-        <Icon icon="mdi:alert-circle-outline" width="64" />
+        <Icon icon="lucide:circle-alert" width="64" />
         <p>加载失败，请稍后重试</p>
         <button class="go-shopping-btn" @click="retryLoad">重新加载</button>
       </div>
@@ -56,7 +56,7 @@
 
           <div class="order-foot">
             <div class="receiver">
-              <Icon icon="mdi:map-marker-outline" width="14" />
+              <Icon icon="lucide:map-pin" width="14" />
               <span>{{ vo.order.receiverName }} {{ vo.order.receiverPhone }} {{ vo.order.address }}</span>
             </div>
             <div class="foot-right">
@@ -213,7 +213,7 @@ onMounted(() => {
 
 .page-title {
   font-size: 20px;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 20px;
 }
 
@@ -224,7 +224,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 64px 0;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .loading-icon {
@@ -240,13 +240,13 @@ onMounted(() => {
   padding: 8px 24px;
   border: none;
   border-radius: 18px;
-  background-color: #ff2442;
+  background-color: var(--brand);
   color: #fff;
   cursor: pointer;
 }
 
 .order-card {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 16px;
@@ -262,7 +262,7 @@ onMounted(() => {
 }
 
 .order-no {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -272,10 +272,10 @@ onMounted(() => {
   border-radius: 10px;
 }
 
-.status-0 { background: #ffeaea; color: #ff2442; }
+.status-0 { background: #ffeaea; color: var(--brand); }
 .status-1 { background: #e8f7e8; color: #2e9e44; }
 .status-2 { background: #e8f0fb; color: #2f6fdd; }
-.status-3, .status-4 { background: #f0f0f0; color: #888; }
+.status-3, .status-4 { background: var(--border-subtle); color: var(--text-tertiary); }
 
 .order-items {
   padding: 12px 0;
@@ -295,25 +295,25 @@ onMounted(() => {
   height: 56px;
   border-radius: 8px;
   object-fit: cover;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 
 .item-name {
   margin: 0 0 4px;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .item-attrs {
   margin: 2px 0;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .item-price {
   margin: 0;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .order-amount {
@@ -322,11 +322,11 @@ onMounted(() => {
   justify-content: flex-end;
   padding: 8px 0 12px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .order-amount .final {
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -347,7 +347,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
   overflow: hidden;
   white-space: nowrap;
@@ -371,7 +371,7 @@ onMounted(() => {
   padding: 6px 18px;
   border: none;
   border-radius: 16px;
-  background-color: #ff2442;
+  background-color: var(--brand);
   color: #fff;
   cursor: pointer;
 }
@@ -390,8 +390,8 @@ onMounted(() => {
   padding: 8px 32px;
   border: 1px solid #ddd;
   border-radius: 18px;
-  background: #fff;
-  color: #666;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 

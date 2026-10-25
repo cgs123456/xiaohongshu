@@ -10,19 +10,19 @@
     <main class="main-content">
       <div class="cart-container">
         <h2 class="cart-title">
-          <Icon icon="mdi:cart-outline" width="24" />
+          <Icon icon="lucide:shopping-cart" width="24" />
           我的购物车
         </h2>
 
         <!-- 加载中 -->
         <div v-if="loading" class="loading-container">
-          <Icon icon="mdi:loading" class="loading-icon" width="48" />
+          <Icon icon="lucide:loader-circle" class="loading-icon" width="48" />
           <p>加载中...</p>
         </div>
 
         <!-- 空购物车 -->
         <div v-else-if="cartItems.length === 0" class="empty-container">
-          <Icon icon="mdi:cart-off" width="64" />
+          <Icon icon="lucide:cart-x" width="64" />
           <p>购物车空空如也，快去逛逛吧~</p>
           <button class="go-shopping-btn" @click="router.push('/shopping')">去逛逛</button>
         </div>
@@ -48,16 +48,16 @@
                 :disabled="item.quantity <= 1 || updatingId === item.id"
                 @click="changeQuantity(item, -1)"
               >
-                <Icon icon="mdi:minus" width="16" />
+                <Icon icon="lucide:minus" width="16" />
               </button>
               <span class="qty-value">{{ item.quantity }}</span>
               <button class="qty-btn" :disabled="updatingId === item.id" @click="changeQuantity(item, 1)">
-                <Icon icon="mdi:plus" width="16" />
+                <Icon icon="lucide:plus" width="16" />
               </button>
             </div>
             <div class="item-subtotal">¥{{ (item.productPrice * item.quantity).toFixed(2) }}</div>
             <button class="remove-btn" :disabled="updatingId === item.id" @click="removeItem(item)">
-              <Icon icon="mdi:delete-outline" width="20" />
+              <Icon icon="lucide:trash-2" width="20" />
             </button>
           </div>
 
@@ -215,7 +215,7 @@ onMounted(() => {
 <style scoped>
 .cart-page {
   min-height: 100vh;
-  background: #f8f8f8;
+  background: var(--bg-page);
 }
 
 .main-content {
@@ -236,7 +236,7 @@ onMounted(() => {
   gap: 8px;
   font-size: 20px;
   font-weight: 700;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 20px 0;
 }
 
@@ -248,8 +248,8 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: 80px 20px;
-  color: #999;
-  background: white;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
   border-radius: 16px;
 }
 
@@ -261,7 +261,7 @@ onMounted(() => {
 
 .loading-icon {
   animation: spin 1s linear infinite;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 @keyframes spin {
@@ -272,7 +272,7 @@ onMounted(() => {
 .go-shopping-btn {
   margin-top: 16px;
   padding: 10px 32px;
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  background: var(--brand-grad);
   color: white;
   border: none;
   border-radius: 20px;
@@ -283,7 +283,7 @@ onMounted(() => {
 
 /* 购物车列表 */
 .cart-list {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -302,7 +302,7 @@ onMounted(() => {
   height: 80px;
   border-radius: 8px;
   object-fit: cover;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   flex-shrink: 0;
 }
 
@@ -314,13 +314,13 @@ onMounted(() => {
 .item-attrs {
   margin: 2px 0 0;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .item-name {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 8px 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -329,7 +329,7 @@ onMounted(() => {
 
 .item-price {
   font-size: 14px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -346,17 +346,17 @@ onMounted(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #e5e5e5;
-  background: white;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
   border-radius: 6px;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
 .qty-btn:hover:not(:disabled) {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .qty-btn:disabled {
@@ -368,7 +368,7 @@ onMounted(() => {
   min-width: 32px;
   text-align: center;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .item-subtotal {
@@ -376,7 +376,7 @@ onMounted(() => {
   text-align: right;
   font-size: 15px;
   font-weight: 600;
-  color: #ff2442;
+  color: var(--brand);
   flex-shrink: 0;
 }
 
@@ -387,7 +387,7 @@ onMounted(() => {
   padding: 8px;
   border: none;
   background: transparent;
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s;
@@ -395,8 +395,8 @@ onMounted(() => {
 }
 
 .remove-btn:hover:not(:disabled) {
-  color: #ff2442;
-  background: #fff0f0;
+  color: var(--brand);
+  background: var(--brand-soft);
 }
 
 /* 底部结算栏 */
@@ -409,29 +409,29 @@ onMounted(() => {
 
 .clear-btn {
   padding: 8px 16px;
-  background: white;
-  border: 1px solid #e5e5e5;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 16px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .clear-btn:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .total-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .total-price {
   font-size: 20px;
   font-weight: 700;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 /* 响应式 */

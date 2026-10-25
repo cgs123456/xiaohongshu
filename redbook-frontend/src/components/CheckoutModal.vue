@@ -6,7 +6,7 @@
           <!-- 下单成功视图 -->
           <template v-if="successMessage">
             <div class="success-body">
-              <Icon icon="mdi:check-circle" class="success-icon" width="64" />
+              <Icon icon="lucide:circle-check" class="success-icon" width="64" />
               <p class="success-text">{{ successMessage }}</p>
               <div class="success-actions">
                 <button class="btn btn-cancel" @click="close">完成</button>
@@ -134,7 +134,7 @@ const goOrders = () => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
@@ -151,7 +151,7 @@ const goOrders = () => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -162,17 +162,17 @@ const goOrders = () => {
 
 .checkout-summary {
   padding: 12px 16px;
-  background: #f8f8f8;
+  background: var(--bg-page);
   border-radius: 8px;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 20px;
 }
 
 .summary-price {
   font-size: 18px;
   font-weight: 700;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 /* 成功视图 */
@@ -191,7 +191,7 @@ const goOrders = () => {
 .success-text {
   margin: 0 0 24px;
   font-size: 15px;
-  color: #333;
+  color: var(--text-primary);
   text-align: center;
   line-height: 1.6;
 }
@@ -222,8 +222,8 @@ const goOrders = () => {
 }
 
 .btn-cancel {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
 }
 
 .btn-cancel:hover:not(:disabled) {

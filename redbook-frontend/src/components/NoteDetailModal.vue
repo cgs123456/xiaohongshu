@@ -31,7 +31,7 @@
                   :class="{ followed: isFollowed }"
                   @click="toggleFollow"
                 >
-                  <Icon :icon="isFollowed ? 'mdi:check' : 'mdi:plus'" width="16" />
+                  <Icon :icon="isFollowed ? 'lucide:check' : 'lucide:plus'" width="16" />
                   {{ isFollowed ? '已关注' : '关注' }}
                 </button>
               </div>
@@ -44,14 +44,14 @@
                 <!-- 标签 -->
                 <div v-if="noteDetail.note.type" class="note-tags">
                   <span class="tag-item">
-                    <Icon icon="mdi:pound" width="14" />
+                    <Icon icon="lucide:hash" width="14" />
                     {{ noteDetail.note.type }}
                   </span>
                 </div>
 
                 <!-- 地址信息 -->
                 <div v-if="noteDetail.note.address" class="note-location">
-                  <Icon icon="mdi:map-marker" width="16" />
+                  <Icon icon="lucide:map-pin" width="16" />
                   <span>{{ noteDetail.note.address }}</span>
                 </div>
               </div>
@@ -64,12 +64,12 @@
 
                 <div class="comments-list">
                   <div v-if="loadingComments" class="loading-comments">
-                    <Icon icon="mdi:loading" class="loading-icon" width="32" />
+                    <Icon icon="lucide:loader-circle" class="loading-icon" width="32" />
                     <p>加载评论中...</p>
                   </div>
 
                   <div v-else-if="comments.length === 0" class="empty-comments">
-                    <Icon icon="mdi:comment-outline" width="48" color="#ccc" />
+                    <Icon icon="lucide:message-circle" width="48" color="#ccc" />
                     <p>暂无评论，快来抢沙发吧~</p>
                   </div>
 
@@ -88,7 +88,7 @@
                         <p class="comment-text">{{ commentVo.comment.content }}</p>
                         <div class="comment-actions">
                           <button class="comment-action-btn" @click="replyToComment(commentVo)">
-                            <Icon icon="mdi:reply" width="14" />
+                            <Icon icon="lucide:reply" width="14" />
                             回复
                           </button>
                         </div>
@@ -109,7 +109,7 @@
                               <p class="comment-text">{{ childVo.comment.content }}</p>
                               <div class="comment-actions">
                                 <button class="comment-action-btn" @click="replyToComment(childVo)">
-                                  <Icon icon="mdi:reply" width="14" />
+                                  <Icon icon="lucide:reply" width="14" />
                                   回复
                                 </button>
                               </div>
@@ -128,7 +128,7 @@
                 <div v-if="replyingTo" class="reply-indicator">
                   <span>回复 @{{ replyingTo.user?.nickname || replyingTo.user?.username || '匿名用户' }}</span>
                   <button class="cancel-reply-btn" @click="cancelReply">
-                    <Icon icon="mdi:close" width="16" />
+                    <Icon icon="lucide:x" width="16" />
                   </button>
                 </div>
                 
@@ -143,7 +143,7 @@
                     @keyup.enter="submitComment"
                   />
                   <button class="emoji-btn" :disabled="submittingComment">
-                    <Icon icon="mdi:emoticon-outline" width="20" />
+                    <Icon icon="lucide:smile" width="20" />
                   </button>
                 </div>
                 <button 
@@ -151,22 +151,22 @@
                   :disabled="!commentInput.trim() || submittingComment"
                   @click="submitComment"
                 >
-                  <Icon v-if="submittingComment" icon="mdi:loading" class="loading-icon" width="16" />
+                  <Icon v-if="submittingComment" icon="lucide:loader-circle" class="loading-icon" width="16" />
                   <span v-else>发送</span>
                 </button>
                 
                 <!-- 互动操作按钮（合并统计和操作） -->
                 <div class="action-buttons">
                   <button class="action-btn like-btn" :class="{ active: isLiked }" :disabled="likeLoading" @click="toggleLike">
-                    <Icon :icon="isLiked ? 'mdi:heart' : 'mdi:heart-outline'" width="22" />
+                    <Icon :icon="isLiked ? 'lucide:heart' : 'lucide:heart'" width="22" />
                     <span>{{ noteDetail.note.like || 0 }}</span>
                   </button>
                   <button class="action-btn collect-btn" :class="{ active: isCollected }" :disabled="collectLoading" @click="toggleCollect">
-                    <Icon :icon="isCollected ? 'mdi:star' : 'mdi:star-outline'" width="22" />
+                    <Icon :icon="isCollected ? 'lucide:star' : 'lucide:star'" width="22" />
                     <span>{{ noteDetail.note.collection || 0 }}</span>
                   </button>
                   <button class="action-btn comment-btn">
-                    <Icon icon="mdi:comment-outline" width="22" />
+                    <Icon icon="lucide:message-circle" width="22" />
                     <span>{{ commentCount }}</span>
                   </button>
                 </div>
@@ -520,7 +520,7 @@ const toggleFollow = async () => {
 
 .detail-container {
   position: relative;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   width: 100%;
   max-width: 1400px;
@@ -537,14 +537,14 @@ const toggleFollow = async () => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
   border: 3px solid #f0f0f0;
-  border-top-color: #ff2442;
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -597,7 +597,7 @@ const toggleFollow = async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: white;
+  background: var(--bg-surface);
 }
 
 .author-header {
@@ -630,13 +630,13 @@ const toggleFollow = async () => {
 .author-name {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .publish-time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
@@ -645,7 +645,7 @@ const toggleFollow = async () => {
   align-items: center;
   gap: 4px;
   padding: 8px 20px;
-  background: #ff2442;
+  background: var(--brand);
   color: white;
   border: none;
   border-radius: 20px;
@@ -661,8 +661,8 @@ const toggleFollow = async () => {
 }
 
 .follow-btn.followed {
-  background: #f0f0f0;
-  color: #666;
+  background: var(--border-subtle);
+  color: var(--text-secondary);
 }
 
 .follow-btn.followed:hover {
@@ -679,14 +679,14 @@ const toggleFollow = async () => {
 .note-title {
   font-size: 20px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 16px 0;
   line-height: 1.4;
 }
 
 .note-content {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.8;
   margin-bottom: 16px;
   white-space: pre-wrap;
@@ -723,8 +723,8 @@ const toggleFollow = async () => {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #f7f7f7;
-  color: #ff2442;
+  background: var(--bg-hover);
+  color: var(--brand);
   border-radius: 16px;
   font-size: 13px;
   font-weight: 500;
@@ -734,7 +734,7 @@ const toggleFollow = async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -756,7 +756,7 @@ const toggleFollow = async () => {
 .comments-header h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -775,7 +775,7 @@ const toggleFollow = async () => {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .loading-comments {
@@ -785,12 +785,12 @@ const toggleFollow = async () => {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .loading-comments .loading-icon {
   animation: spin 1s linear infinite;
-  color: #ff2442;
+  color: var(--brand);
   margin-bottom: 12px;
 }
 
@@ -850,17 +850,17 @@ const toggleFollow = async () => {
 .comment-author {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .comment-time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .comment-text {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.6;
   margin: 0 0 8px 0;
 }
@@ -877,14 +877,14 @@ const toggleFollow = async () => {
   padding: 0;
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
   cursor: pointer;
   transition: color 0.2s;
 }
 
 .comment-action-btn:hover {
-  color: #ff2442;
+  color: var(--brand);
 }
 
 /* 底部操作栏 */
@@ -894,7 +894,7 @@ const toggleFollow = async () => {
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid #f0f0f0;
-  background: white;
+  background: var(--bg-surface);
   flex-wrap: wrap;
 }
 
@@ -907,7 +907,7 @@ const toggleFollow = async () => {
   background: #fff8e1;
   border-radius: 8px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -918,7 +918,7 @@ const toggleFollow = async () => {
   padding: 4px;
   background: transparent;
   border: none;
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   border-radius: 50%;
   transition: all 0.2s;
@@ -926,14 +926,14 @@ const toggleFollow = async () => {
 
 .cancel-reply-btn:hover {
   background: rgba(0, 0, 0, 0.05);
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .input-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
-  background: #f7f7f7;
+  background: var(--bg-hover);
   border-radius: 20px;
   padding: 8px 16px;
   min-width: 0;
@@ -945,7 +945,7 @@ const toggleFollow = async () => {
   background: transparent;
   outline: none;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   min-width: 0;
 }
 
@@ -955,14 +955,14 @@ const toggleFollow = async () => {
 }
 
 .comment-input::placeholder {
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .emoji-btn {
   padding: 4px;
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -971,7 +971,7 @@ const toggleFollow = async () => {
 }
 
 .emoji-btn:hover:not(:disabled) {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .emoji-btn:disabled {
@@ -981,7 +981,7 @@ const toggleFollow = async () => {
 
 .send-btn {
   padding: 8px 20px;
-  background: #ff2442;
+  background: var(--brand);
   color: white;
   border: none;
   border-radius: 20px;
@@ -1016,10 +1016,10 @@ const toggleFollow = async () => {
   gap: 6px;
   padding: 10px 16px;
   border: none;
-  background: #f7f7f7;
+  background: var(--bg-hover);
   border-radius: 24px;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s;
@@ -1037,8 +1037,8 @@ const toggleFollow = async () => {
 }
 
 .action-btn.like-btn.active {
-  color: #ff2442;
-  background: #fff0f0;
+  color: var(--brand);
+  background: var(--brand-soft);
 }
 
 .action-btn.collect-btn.active {

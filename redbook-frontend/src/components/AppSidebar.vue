@@ -6,7 +6,7 @@
         :class="{ active: currentRoute === '/' }"
         @click="navigateTo('/')"
       >
-        <Icon icon="mdi:compass" class="nav-icon" width="24" />
+        <Icon icon="lucide:compass" class="nav-icon" width="24" />
         <span class="nav-text">发现</span>
       </div>
       <div
@@ -14,7 +14,7 @@
         :class="{ active: currentRoute === '/shopping' }"
         @click="navigateTo('/shopping')"
       >
-        <Icon icon="mdi:shopping" class="nav-icon" width="24" />
+        <Icon icon="lucide:shopping-bag" class="nav-icon" width="24" />
         <span class="nav-text">购物</span>
       </div>
       <div
@@ -22,7 +22,7 @@
         :class="{ active: currentRoute === '/cart' }"
         @click="navigateTo('/cart')"
       >
-        <Icon icon="mdi:cart-outline" class="nav-icon" width="24" />
+        <Icon icon="lucide:shopping-cart" class="nav-icon" width="24" />
         <span class="nav-text">购物车</span>
       </div>
       <div
@@ -30,7 +30,7 @@
         :class="{ active: currentRoute === '/orders' }"
         @click="navigateTo('/orders')"
       >
-        <Icon icon="mdi:file-document-outline" class="nav-icon" width="24" />
+        <Icon icon="lucide:file-text" class="nav-icon" width="24" />
         <span class="nav-text">订单</span>
       </div>
       <div
@@ -38,7 +38,7 @@
         :class="{ active: currentRoute === '/notifications' }"
         @click="navigateTo('/notifications')"
       >
-        <Icon icon="mdi:bell-outline" class="nav-icon" width="24" />
+        <Icon icon="lucide:bell" class="nav-icon" width="24" />
         <span class="nav-text">通知</span>
       </div>
       <div
@@ -46,7 +46,7 @@
         :class="{ active: currentRoute === '/profile' }"
         @click="navigateTo('/profile')"
       >
-        <Icon icon="mdi:clock-outline" class="nav-icon" width="24" />
+        <Icon icon="lucide:clock" class="nav-icon" width="24" />
         <span class="nav-text">历史</span>
       </div>
     </div>
@@ -75,8 +75,8 @@ const navigateTo = (path: string) => {
   top: 64px;
   width: 220px;
   height: calc(100vh - 64px);
-  background: white;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   padding: 24px 0;
@@ -96,20 +96,20 @@ const navigateTo = (path: string) => {
   margin-bottom: 4px;
   cursor: pointer;
   font-size: 15px;
-  color: #666;
-  border-radius: 12px;
-  transition: all 0.2s;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  transition: all var(--dur-fast) var(--ease-out);
   position: relative;
 }
 
 .nav-item:hover {
-  background: #f7f7f7;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, #fff0f0 0%, #ffe8e8 100%);
-  color: #ff2442;
+  background: var(--brand-soft);
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -121,7 +121,7 @@ const navigateTo = (path: string) => {
   transform: translateY(-50%);
   width: 4px;
   height: 24px;
-  background: #ff2442;
+  background: var(--brand);
   border-radius: 0 4px 4px 0;
 }
 

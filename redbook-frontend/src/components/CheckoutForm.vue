@@ -158,7 +158,7 @@ defineExpose({ validate })
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -169,7 +169,7 @@ defineExpose({ validate })
 .field-label {
   display: block;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
@@ -177,20 +177,20 @@ defineExpose({ validate })
   width: 100%;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   outline: none;
   transition: border-color 0.2s;
 }
 
 .field-input:focus {
-  border-color: #ff2442;
+  border-color: var(--brand);
 }
 
 .field-input.error {
-  border-color: #ff2442;
+  border-color: var(--brand);
   background: #fff5f5;
 }
 
@@ -198,17 +198,17 @@ defineExpose({ validate })
   width: 100%;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   font-size: 14px;
-  color: #333;
-  background: white;
+  color: var(--text-primary);
+  background: var(--bg-surface);
   outline: none;
   cursor: pointer;
 }
 
 .coupon-select:focus {
-  border-color: #ff2442;
+  border-color: var(--brand);
 }
 
 .coupon-failed {

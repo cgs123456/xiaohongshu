@@ -4,13 +4,13 @@
       <div class="header-content">
         <div class="logo" @click="goHome">
           <div class="logo-icon">
-            <Icon icon="mdi:book-open-page-variant" width="28" color="#ff2442" />
+            <Icon icon="lucide:book-open" width="28" color="#ff2442" />
           </div>
           <span class="logo-text">小红书</span>
         </div>
         
         <div class="search-bar">
-          <Icon icon="mdi:magnify" width="20" class="search-icon" />
+          <Icon icon="lucide:search" width="20" class="search-icon" />
           <input 
             v-model="searchKeyword" 
             type="text" 
@@ -21,7 +21,7 @@
         
         <div class="header-actions">
           <button class="action-btn create-btn" @click="showCreateModal = true">
-            <Icon icon="mdi:pencil" width="18" />
+            <Icon icon="lucide:pencil" width="18" />
             <span>创作中心</span>
           </button>
           
@@ -55,12 +55,12 @@
                 </div>
                 <div class="menu-divider"></div>
                 <button class="menu-item" @click="goToProfile">
-                  <Icon icon="mdi:account" width="18" />
+                  <Icon icon="lucide:user" width="18" />
                   <span>个人主页</span>
                 </button>
                 <div class="menu-divider"></div>
                 <button class="menu-item logout-item" @click="handleLogout">
-                  <Icon icon="mdi:logout" width="18" />
+                  <Icon icon="lucide:log-out" width="18" />
                   <span>退出登录</span>
                 </button>
               </div>
@@ -188,12 +188,11 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 64px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
   z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
-}
+  }
 
 .header-wrapper {
   width: 100%;
@@ -233,14 +232,14 @@ onUnmounted(() => {
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #fff0f0 0%, #ffe0e0 100%);
-  border-radius: 10px;
+  background: var(--brand-soft);
+  border-radius: var(--radius-sm);
 }
 
 .logo-text {
   font-size: 20px;
-  font-weight: 700;
-  color: #ff2442;
+  font-weight: 800;
+  color: var(--brand);
   letter-spacing: 0.5px;
 }
 
@@ -249,22 +248,22 @@ onUnmounted(() => {
   max-width: 500px;
   display: flex;
   align-items: center;
-  background: #f7f7f7;
-  border-radius: 24px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-full);
   padding: 10px 20px;
   gap: 10px;
-  transition: all 0.3s;
+  transition: all var(--dur-base) var(--ease-out);
   border: 2px solid transparent;
 }
 
 .search-bar:focus-within {
-  background: white;
-  border-color: #ff2442;
-  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.1);
+  background: var(--bg-surface);
+  border-color: var(--brand);
+  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.12);
 }
 
 .search-icon {
-  color: #999;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
@@ -274,11 +273,11 @@ onUnmounted(() => {
   background: transparent;
   outline: none;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .search-bar input::placeholder {
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .header-actions {
@@ -294,34 +293,34 @@ onUnmounted(() => {
   gap: 6px;
   padding: 10px 20px;
   border: none;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all var(--dur-base) var(--ease-out);
   white-space: nowrap;
 }
 
 .create-btn {
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  background: var(--brand-grad);
   color: white;
-  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.2);
+  box-shadow: var(--shadow-brand);
 }
 
 .create-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 36, 66, 0.3);
+  box-shadow: var(--shadow-brand-lg);
 }
 
 .login-btn-header {
-  background: white;
-  color: #333;
-  border: 1px solid #e5e5e5;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .login-btn-header:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 /* 用户菜单 */
@@ -336,11 +335,11 @@ onUnmounted(() => {
   object-fit: cover;
   cursor: pointer;
   border: 2px solid transparent;
-  transition: all 0.3s;
+  transition: all var(--dur-base) var(--ease-out);
 }
 
 .user-avatar:hover {
-  border-color: #ff2442;
+  border-color: var(--brand);
   transform: scale(1.05);
 }
 
@@ -349,9 +348,9 @@ onUnmounted(() => {
   top: calc(100% + 12px);
   right: 0;
   width: 240px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
   z-index: 100;
 }
@@ -361,7 +360,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(135deg, #fff0f0 0%, #ffe0e0 100%);
+  background: var(--brand-soft);
 }
 
 .dropdown-avatar {
@@ -379,7 +378,7 @@ onUnmounted(() => {
 .user-nickname {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -388,12 +387,12 @@ onUnmounted(() => {
 
 .user-id {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .menu-divider {
   height: 1px;
-  background: #f0f0f0;
+  background: var(--border-subtle);
   margin: 8px 0;
 }
 
@@ -405,23 +404,23 @@ onUnmounted(() => {
   padding: 12px 16px;
   border: none;
   background: none;
-  color: #333;
+  color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background var(--dur-fast) var(--ease-out);
   text-align: left;
 }
 
 .menu-item:hover {
-  background: #f7f7f7;
+  background: var(--bg-hover);
 }
 
 .logout-item {
-  color: #ff2442;
+  color: var(--brand);
 }
 
 .logout-item:hover {
-  background: #fff0f0;
+  background: var(--brand-soft);
 }
 
 /* 下拉菜单动画 */

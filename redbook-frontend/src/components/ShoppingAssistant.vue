@@ -7,7 +7,7 @@
           <!-- 头部 -->
           <div class="chat-header">
             <div class="header-left">
-              <Icon icon="mdi:robot" width="24" class="robot-icon" />
+              <Icon icon="lucide:bot" width="24" class="robot-icon" />
               <div class="header-info">
                 <h3>购物助手</h3>
                 <span class="status">在线</span>
@@ -24,8 +24,8 @@
               :class="{ 'user-message': message.type === 'user', 'assistant-message': message.type === 'assistant' }"
             >
               <div class="message-avatar">
-                <Icon v-if="message.type === 'assistant'" icon="mdi:robot" width="24" />
-                <Icon v-else icon="mdi:account-circle" width="24" />
+                <Icon v-if="message.type === 'assistant'" icon="lucide:bot" width="24" />
+                <Icon v-else icon="lucide:circle-user" width="24" />
               </div>
               <div class="message-content">
                 <div class="message-text">{{ message.text }}</div>
@@ -36,7 +36,7 @@
             <!-- 加载中 -->
             <div v-if="loading" class="message-item assistant-message">
               <div class="message-avatar">
-                <Icon icon="mdi:robot" width="24" />
+                <Icon icon="lucide:bot" width="24" />
               </div>
               <div class="message-content">
                 <div class="message-text typing">
@@ -208,7 +208,7 @@ function handleClose() {
 .chat-window {
   width: 380px;
   height: 600px;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   display: flex;
@@ -275,7 +275,7 @@ function handleClose() {
   align-items: center;
   justify-content: center;
   background: #e9ecef;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .assistant-message .message-avatar {
@@ -306,8 +306,8 @@ function handleClose() {
 .message-text {
   padding: 12px 16px;
   border-radius: 12px;
-  background: white;
-  color: #333;
+  background: var(--bg-surface);
+  color: var(--text-primary);
   line-height: 1.5;
   font-size: 14px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -321,7 +321,7 @@ function handleClose() {
 .message-time {
   margin-top: 6px;
   font-size: 11px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 /* 输入中动画 */
@@ -364,7 +364,7 @@ function handleClose() {
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid #e9ecef;
-  background: white;
+  background: var(--bg-surface);
 }
 
 .chat-input input {
@@ -378,7 +378,7 @@ function handleClose() {
 }
 
 .chat-input input:focus {
-  border-color: #ff2442;
+  border-color: var(--brand);
 }
 
 .send-btn {

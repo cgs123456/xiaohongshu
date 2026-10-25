@@ -52,7 +52,7 @@
 
             <!-- 提示信息 -->
             <div class="tip-text" v-if="attributes && attributes.length > 0 && !allAttributesSelected">
-              <Icon icon="mdi:information-outline" width="16" />
+              <Icon icon="lucide:info" width="16" />
               请选择所有商品属性
             </div>
           </div>
@@ -205,7 +205,7 @@ const handleCheckoutSuccess = () => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
@@ -222,7 +222,7 @@ const handleCheckoutSuccess = () => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -245,7 +245,7 @@ const handleCheckoutSuccess = () => {
   height: 80px;
   border-radius: 8px;
   object-fit: cover;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 
 .product-info {
@@ -255,7 +255,7 @@ const handleCheckoutSuccess = () => {
 .product-name {
   font-size: 15px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 8px 0;
   line-height: 1.4;
 }
@@ -268,13 +268,13 @@ const handleCheckoutSuccess = () => {
 
 .price-symbol {
   font-size: 14px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
 .price-value {
   font-size: 20px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 700;
 }
 
@@ -294,7 +294,7 @@ const handleCheckoutSuccess = () => {
 .attribute-label {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -307,22 +307,22 @@ const handleCheckoutSuccess = () => {
 .attribute-option {
   padding: 8px 20px;
   border: 1px solid #ddd;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 8px;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
 .attribute-option:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .attribute-option.active {
-  border-color: #ff2442;
+  border-color: var(--brand);
   background: #fff5f5;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 .tip-text {
@@ -345,7 +345,7 @@ const handleCheckoutSuccess = () => {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -354,7 +354,7 @@ const handleCheckoutSuccess = () => {
   align-items: center;
   gap: 8px;
   padding: 16px;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
@@ -370,9 +370,9 @@ const handleCheckoutSuccess = () => {
 .no-coupon {
   padding: 16px;
   text-align: center;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 13px;
-  background: #f8f8f8;
+  background: var(--bg-page);
   border-radius: 8px;
 }
 
@@ -394,12 +394,12 @@ const handleCheckoutSuccess = () => {
 }
 
 .coupon-item:hover:not(.disabled) {
-  border-color: #ff2442;
+  border-color: var(--brand);
   background: #fff5f5;
 }
 
 .coupon-item.active {
-  border-color: #ff2442;
+  border-color: var(--brand);
   background: #fff5f5;
 }
 
@@ -425,19 +425,19 @@ const handleCheckoutSuccess = () => {
 
 .discount-symbol {
   font-size: 12px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
 .discount-value {
   font-size: 20px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 700;
 }
 
 .discount-unit {
   font-size: 14px;
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
   margin-left: 2px;
 }
@@ -450,17 +450,17 @@ const handleCheckoutSuccess = () => {
 .coupon-name {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .coupon-desc {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .coupon-check {
-  color: #ff2442;
+  color: var(--brand);
   margin-left: 8px;
 }
 
@@ -471,12 +471,12 @@ const handleCheckoutSuccess = () => {
 
 .coupon-text {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* 价格汇总 */
 .price-summary {
-  background: #f8f8f8;
+  background: var(--bg-page);
   padding: 16px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -495,17 +495,17 @@ const handleCheckoutSuccess = () => {
 
 .summary-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .summary-value {
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .summary-value.discount {
-  color: #ff2442;
+  color: var(--brand);
 }
 
 .summary-row.total {
@@ -517,13 +517,13 @@ const handleCheckoutSuccess = () => {
 .summary-row.total .summary-label {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .summary-row.total .summary-value {
   font-size: 18px;
   font-weight: 700;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 /* 底部按钮 */
@@ -546,8 +546,8 @@ const handleCheckoutSuccess = () => {
 }
 
 .btn-cancel {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
 }
 
 .btn-cancel:hover {

@@ -5,7 +5,7 @@
       <h1 class="error-title">页面走丢了</h1>
       <p class="error-desc">抱歉，您访问的页面不存在或已被删除</p>
       <button class="back-home-btn" @click="goHome">
-        <Icon icon="mdi:home" width="18" />
+        <Icon icon="lucide:house" width="18" />
         返回首页
       </button>
     </div>
@@ -40,7 +40,7 @@ const goHome = () => {
 .error-code {
   font-size: 120px;
   font-weight: 800;
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  background: var(--brand-grad);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -51,13 +51,13 @@ const goHome = () => {
 .error-title {
   font-size: 28px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 12px 0;
 }
 
 .error-desc {
   font-size: 16px;
-  color: #999;
+  color: var(--text-tertiary);
   margin: 0 0 32px 0;
 }
 
@@ -66,7 +66,7 @@ const goHome = () => {
   align-items: center;
   gap: 8px;
   padding: 12px 32px;
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  background: var(--brand-grad);
   color: white;
   border: none;
   border-radius: 24px;

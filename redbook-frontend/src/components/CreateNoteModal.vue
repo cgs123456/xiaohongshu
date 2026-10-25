@@ -6,7 +6,7 @@
           <div class="modal-header">
             <h3>发布笔记</h3>
             <button class="close-btn" @click="handleClose">
-              <Icon icon="mdi:close" width="24" />
+              <Icon icon="lucide:x" width="24" />
             </button>
           </div>
 
@@ -44,7 +44,7 @@
                       @click="toggleTopicPopup"
                       type="button"
                     >
-                      <Icon icon="mdi:pound" width="18" />
+                      <Icon icon="lucide:hash" width="18" />
                       话题
                     </button>
                     
@@ -54,7 +54,7 @@
                         <div class="topic-popup-header">
                           <span>选择话题</span>
                           <button class="popup-close" @click="showTopicPopup = false">
-                            <Icon icon="mdi:close" width="16" />
+                            <Icon icon="lucide:x" width="16" />
                           </button>
                         </div>
                         <div class="topic-search">
@@ -73,7 +73,7 @@
                             class="topic-item"
                             @click="selectTopic(topic)"
                           >
-                            <Icon icon="mdi:pound" width="16" />
+                            <Icon icon="lucide:hash" width="16" />
                             {{ topic }}
                           </div>
                           <div 
@@ -81,7 +81,7 @@
                             class="topic-item topic-create"
                             @click="selectOrCreateTopic"
                           >
-                            <Icon icon="mdi:plus-circle" width="16" />
+                            <Icon icon="lucide:circle-plus" width="16" />
                             创建 "{{ topicSearch }}"
                           </div>
                           <div v-if="filteredTopics.length === 0 && !topicSearch" class="topic-empty">
@@ -103,11 +103,11 @@
                 <div v-if="imagePreview" class="image-preview">
                   <img :src="imagePreview" alt="预览" />
                   <button class="remove-image" @click="removeImage">
-                    <Icon icon="mdi:close-circle" width="24" />
+                    <Icon icon="lucide:circle-x" width="24" />
                   </button>
                 </div>
                 <div v-else class="upload-area" @click="triggerFileInput">
-                  <Icon icon="mdi:image-plus" width="48" />
+                  <Icon icon="lucide:image-plus" width="48" />
                   <p>点击上传图片</p>
                   <input 
                     ref="fileInput"
@@ -131,7 +131,7 @@
                 >
                   #{{ topic }}
                   <button class="remove-topic" @click="removeSelectedTopic(index)">
-                    <Icon icon="mdi:close" width="14" />
+                    <Icon icon="lucide:x" width="14" />
                   </button>
                 </span>
               </div>
@@ -419,7 +419,7 @@ const handlePublish = async () => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   width: 100%;
   max-width: 600px;
@@ -441,21 +441,21 @@ const handlePublish = async () => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .close-btn {
   width: 32px;
   height: 32px;
   border: none;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .close-btn:hover {
@@ -477,7 +477,7 @@ const handlePublish = async () => {
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -492,7 +492,7 @@ const handlePublish = async () => {
 }
 
 .form-input:focus {
-  border-color: #ff2442;
+  border-color: var(--brand);
 }
 
 .form-textarea {
@@ -508,12 +508,12 @@ const handlePublish = async () => {
 }
 
 .form-textarea:focus {
-  border-color: #ff2442;
+  border-color: var(--brand);
 }
 
 .char-count {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 /* 内容区域 */
@@ -538,17 +538,17 @@ const handlePublish = async () => {
   gap: 4px;
   padding: 6px 12px;
   border: 1px solid #ddd;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .topic-btn:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 /* 话题弹窗 */
@@ -558,7 +558,7 @@ const handlePublish = async () => {
   left: 0;
   margin-top: 8px;
   width: 300px;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   z-index: 100;
@@ -573,13 +573,13 @@ const handlePublish = async () => {
   border-bottom: 1px solid #f0f0f0;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .popup-close {
   border: none;
   background: none;
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -588,7 +588,7 @@ const handlePublish = async () => {
 }
 
 .popup-close:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .topic-search {
@@ -607,7 +607,7 @@ const handlePublish = async () => {
 }
 
 .topic-search-input:focus {
-  border-color: #ff2442;
+  border-color: var(--brand);
 }
 
 .topic-list {
@@ -621,7 +621,7 @@ const handlePublish = async () => {
   gap: 8px;
   padding: 12px 16px;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -631,7 +631,7 @@ const handlePublish = async () => {
 }
 
 .topic-create {
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 500;
 }
 
@@ -639,7 +639,7 @@ const handlePublish = async () => {
   padding: 24px 16px;
   text-align: center;
   font-size: 13px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 /* 弹窗动画 */
@@ -666,12 +666,12 @@ const handlePublish = async () => {
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .upload-area:hover {
-  border-color: #ff2442;
-  color: #ff2442;
+  border-color: var(--brand);
+  color: var(--brand);
 }
 
 .upload-area p {
@@ -728,7 +728,7 @@ const handlePublish = async () => {
   gap: 6px;
   padding: 6px 12px;
   background: #fff5f5;
-  color: #ff2442;
+  color: var(--brand);
   border-radius: 16px;
   font-size: 13px;
   font-weight: 500;
@@ -737,7 +737,7 @@ const handlePublish = async () => {
 .remove-topic {
   border: none;
   background: none;
-  color: #ff2442;
+  color: var(--brand);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -770,8 +770,8 @@ const handlePublish = async () => {
 }
 
 .btn-cancel {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
 }
 
 .btn-cancel:hover {

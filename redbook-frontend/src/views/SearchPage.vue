@@ -6,7 +6,7 @@
     <main class="search-main">
       <!-- 搜索框 -->
       <div class="search-bar">
-        <Icon icon="mdi:magnify" width="20" />
+        <Icon icon="lucide:search" width="20" />
         <input
           v-model="keyword"
           class="search-input"
@@ -21,9 +21,9 @@
       <template v-if="!activeKeyword">
         <section v-if="history.length > 0" class="panel">
           <div class="panel-head">
-            <h3><Icon icon="mdi:history" width="16" /> 搜索历史</h3>
+            <h3><Icon icon="lucide:history" width="16" /> 搜索历史</h3>
             <button class="clear-btn" @click="handleClearHistory">
-              <Icon icon="mdi:delete-outline" width="14" /> 清空
+              <Icon icon="lucide:trash-2" width="14" /> 清空
             </button>
           </div>
           <div class="chip-list">
@@ -35,7 +35,7 @@
 
         <section v-if="hotList.length > 0" class="panel">
           <div class="panel-head">
-            <h3><Icon icon="mdi:fire" width="16" /> 热搜榜</h3>
+            <h3><Icon icon="lucide:flame" width="16" /> 热搜榜</h3>
           </div>
           <div class="hot-list">
             <button v-for="(item, idx) in hotList" :key="idx" class="hot-item" @click="searchFrom(hotWord(item))">
@@ -47,7 +47,7 @@
         </section>
 
         <div v-if="history.length === 0 && hotList.length === 0 && !loadingSide" class="empty-container">
-          <Icon icon="mdi:magnify" width="64" />
+          <Icon icon="lucide:search" width="64" />
           <p>输入关键词，发现更多好笔记</p>
         </div>
       </template>
@@ -57,12 +57,12 @@
         <p class="result-summary">“{{ activeKeyword }}” 的搜索结果（{{ results.length }} 条）</p>
 
         <div v-if="loading" class="loading-container">
-          <Icon icon="mdi:loading" class="loading-icon" width="48" />
+          <Icon icon="lucide:loader-circle" class="loading-icon" width="48" />
           <p>搜索中...</p>
         </div>
 
         <div v-else-if="results.length === 0" class="empty-container">
-          <Icon icon="mdi:file-find-outline" width="64" />
+          <Icon icon="lucide:file-search" width="64" />
           <p>没有找到相关笔记，换个关键词试试</p>
         </div>
 
@@ -78,7 +78,7 @@
                   <span class="author-name">{{ item.author }}</span>
                 </div>
                 <span class="like-count">
-                  <Icon icon="mdi:heart-outline" width="14" />
+                  <Icon icon="lucide:heart" width="14" />
                   {{ item.likes }}
                 </span>
               </div>
@@ -254,7 +254,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 22px;
   padding: 10px 18px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
@@ -272,13 +272,13 @@ onMounted(() => {
   border: none;
   border-radius: 16px;
   padding: 6px 20px;
-  background-color: #ff2442;
+  background-color: var(--brand);
   color: #fff;
   cursor: pointer;
 }
 
 .panel {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 12px;
   padding: 16px 20px;
   margin-top: 20px;
@@ -295,7 +295,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 15px;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 12px;
 }
 
@@ -305,7 +305,7 @@ onMounted(() => {
   gap: 2px;
   border: none;
   background: none;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
   cursor: pointer;
 }
@@ -320,7 +320,7 @@ onMounted(() => {
   border: none;
   border-radius: 16px;
   padding: 6px 16px;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   color: #555;
   font-size: 13px;
   cursor: pointer;
@@ -328,7 +328,7 @@ onMounted(() => {
 
 .chip:hover {
   background: #ffeaea;
-  color: #ff2442;
+  color: var(--brand);
 }
 
 .hot-list {
@@ -348,7 +348,7 @@ onMounted(() => {
 }
 
 .hot-item:hover {
-  background: #fafafa;
+  background: var(--bg-page);
 }
 
 .hot-rank {
@@ -356,7 +356,7 @@ onMounted(() => {
   height: 20px;
   border-radius: 6px;
   background: #eee;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
   display: inline-flex;
   align-items: center;
@@ -365,23 +365,23 @@ onMounted(() => {
 }
 
 .hot-rank.top {
-  background: #ff2442;
+  background: var(--brand);
   color: #fff;
 }
 
 .hot-word {
   flex: 1;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .hot-score {
-  color: #ff2442;
+  color: var(--brand);
   font-size: 12px;
 }
 
 .result-summary {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   margin: 16px 4px;
 }
@@ -393,7 +393,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 64px 0;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .loading-icon {
@@ -415,7 +415,7 @@ onMounted(() => {
 .result-card {
   display: flex;
   gap: 14px;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 12px;
   padding: 14px;
   cursor: pointer;
@@ -427,7 +427,7 @@ onMounted(() => {
   height: 84px;
   border-radius: 8px;
   object-fit: cover;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   flex-shrink: 0;
 }
 
@@ -441,7 +441,7 @@ onMounted(() => {
 .result-title {
   margin: 0 0 6px;
   font-size: 15px;
-  color: #333;
+  color: var(--text-primary);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -450,7 +450,7 @@ onMounted(() => {
 .result-content {
   margin: 0 0 10px;
   font-size: 13px;
-  color: #999;
+  color: var(--text-tertiary);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -479,7 +479,7 @@ onMounted(() => {
 
 .author-name {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .like-count {
@@ -487,6 +487,6 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 </style>

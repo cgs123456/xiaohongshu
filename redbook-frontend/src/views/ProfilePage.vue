@@ -8,7 +8,16 @@
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <div class="profile-container">
+      <!-- 未登录：引导登录而不是渲染空壳 -->
+      <EmptyState
+        v-if="!userStore.isLoggedIn"
+        icon="lucide:circle-user"
+        title="登录后查看个人主页"
+        description="管理你的笔记、订单与浏览历史"
+        action-text="去登录"
+        @action="goHome"
+      />
+      <div v-else class="profile-container">
         <!-- 用户信息卡片 -->
         <div class="profile-card">
           <div class="profile-header">
@@ -43,7 +52,7 @@
           </div>
 
           <button class="logout-btn" @click="handleLogout">
-            <Icon icon="mdi:logout" width="18" />
+            <Icon icon="lucide:log-out" width="18" />
             退出登录
           </button>
         </div>
@@ -51,12 +60,12 @@
         <!-- 占位模块 -->
         <div class="placeholder-grid">
           <div class="placeholder-card">
-            <Icon icon="mdi:note-multiple-outline" width="40" />
+            <Icon icon="lucide:sticky-note" width="40" />
             <h3>我的笔记</h3>
             <p>开发中，敬请期待</p>
           </div>
           <div class="placeholder-card">
-            <Icon icon="mdi:cog-outline" width="40" />
+            <Icon icon="lucide:settings" width="40" />
             <h3>设置</h3>
             <p>开发中，敬请期待</p>
           </div>
@@ -71,10 +80,16 @@ import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppSidebar from '../components/AppSidebar.vue'
+import EmptyState from '../components/EmptyState.vue'
 import { useUserStore } from '../stores/user'
 
 const router = useRouter()
 const userStore = useUserStore()
+
+// 未登录引导：回首页由登录弹窗承接
+const goHome = () => {
+  router.push('/')
+}
 
 // 退出登录
 const handleLogout = () => {
@@ -86,7 +101,7 @@ const handleLogout = () => {
 <style scoped>
 .profile-page {
   min-height: 100vh;
-  background: #f8f8f8;
+  background: var(--bg-page);
 }
 
 .main-content {
@@ -103,7 +118,7 @@ const handleLogout = () => {
 
 /* 用户信息卡片 */
 .profile-card {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -115,7 +130,7 @@ const handleLogout = () => {
   align-items: center;
   gap: 20px;
   padding-bottom: 24px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .profile-avatar {
@@ -129,13 +144,13 @@ const handleLogout = () => {
 .profile-nickname {
   font-size: 22px;
   font-weight: 700;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 6px 0;
 }
 
 .profile-id {
   font-size: 13px;
-  color: #999;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
@@ -153,12 +168,12 @@ const handleLogout = () => {
 
 .detail-label {
   width: 60px;
-  color: #999;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
 .detail-value {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .logout-btn {
@@ -168,18 +183,18 @@ const handleLogout = () => {
   gap: 8px;
   width: 100%;
   padding: 12px;
-  background: #fff0f0;
-  color: #ff2442;
+  background: var(--brand-soft);
+  color: var(--brand);
   border: none;
   border-radius: 12px;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--dur-fast) var(--ease-out);
 }
 
 .logout-btn:hover {
-  background: #ffe0e0;
+  background: var(--brand-soft-2);
 }
 
 /* 占位模块 */
@@ -190,26 +205,26 @@ const handleLogout = () => {
 }
 
 .placeholder-card {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 16px;
   padding: 40px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  color: #ccc;
+  color: var(--text-disabled);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .placeholder-card h3 {
   font-size: 16px;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .placeholder-card p {
   font-size: 13px;
-  color: #bbb;
+  color: var(--text-disabled);
   margin: 0;
 }
 

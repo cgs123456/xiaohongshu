@@ -4,13 +4,13 @@
       <div v-if="visible" class="modal-overlay" @click="handleOverlayClick">
         <div class="modal-container" @click.stop>
           <button class="close-btn" @click="closeModal">
-            <Icon icon="mdi:close" width="20" color="#666" />
+            <Icon icon="lucide:x" width="20" color="#666" />
           </button>
 
           <div class="modal-content">
             <!-- Logo -->
             <div class="modal-logo">
-              <Icon icon="mdi:book-open-page-variant" width="48" color="#ff2442" />
+              <Icon icon="lucide:book-open" width="48" color="#ff2442" />
             </div>
 
             <!-- 标题 -->
@@ -36,11 +36,11 @@
             <div v-if="activeTab === 'qrcode'" class="qrcode-section">
               <div class="qrcode-box">
                 <div class="qrcode-placeholder">
-                  <Icon icon="mdi:qrcode" width="120" color="#333" />
+                  <Icon icon="lucide:qr-code" width="120" color="#333" />
                 </div>
               </div>
               <p class="qrcode-tip">
-                <Icon icon="mdi:cellphone" width="16" />
+                <Icon icon="lucide:smartphone" width="16" />
                 打开
                 <span class="highlight">小红书App</span>
                 扫码登录
@@ -277,7 +277,7 @@ onUnmounted(() => {
 
 .modal-container {
   position: relative;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 24px;
   width: 100%;
   max-width: 420px;
@@ -303,7 +303,7 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   border: none;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -331,7 +331,7 @@ onUnmounted(() => {
 .modal-title {
   font-size: 20px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   text-align: center;
   margin-bottom: 32px;
 }
@@ -340,7 +340,7 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   margin-bottom: 32px;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   border-radius: 12px;
   padding: 4px;
 }
@@ -353,14 +353,14 @@ onUnmounted(() => {
   border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .tab-item.active {
-  background: white;
-  color: #ff2442;
+  background: var(--bg-surface);
+  color: var(--brand);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -374,7 +374,7 @@ onUnmounted(() => {
 .qrcode-box {
   width: 200px;
   height: 200px;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -394,18 +394,18 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .highlight {
-  color: #ff2442;
+  color: var(--brand);
   font-weight: 600;
 }
 
 .qrcode-subtitle {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 /* 手机号登录 */
@@ -422,7 +422,7 @@ onUnmounted(() => {
 .input-wrapper {
   display: flex;
   align-items: center;
-  background: #f7f7f7;
+  background: var(--bg-hover);
   border-radius: 12px;
   padding: 14px 16px;
   border: 2px solid transparent;
@@ -430,13 +430,13 @@ onUnmounted(() => {
 }
 
 .input-wrapper:focus-within {
-  background: white;
-  border-color: #ff2442;
+  background: var(--bg-surface);
+  border-color: var(--brand);
 }
 
 .country-code {
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
   margin-right: 12px;
   padding-right: 12px;
   border-right: 1px solid #e5e5e5;
@@ -449,19 +449,19 @@ onUnmounted(() => {
   background: transparent;
   outline: none;
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .phone-input::placeholder,
 .code-input::placeholder {
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .send-code-btn {
   padding: 6px 16px;
   background: transparent;
   border: none;
-  color: #ff2442;
+  color: var(--brand);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -474,14 +474,14 @@ onUnmounted(() => {
 }
 
 .send-code-btn:disabled {
-  color: #999;
+  color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
 .login-btn {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(135deg, #ff2442 0%, #ff4d6d 100%);
+  background: var(--brand-grad);
   color: white;
   border: none;
   border-radius: 12px;
@@ -521,12 +521,12 @@ onUnmounted(() => {
 
 .checkbox-text {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   line-height: 1.5;
 }
 
 .link {
-  color: #ff2442;
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -559,9 +559,9 @@ onUnmounted(() => {
   position: relative;
   display: inline-block;
   padding: 0 16px;
-  background: white;
+  background: var(--bg-surface);
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .social-login {
@@ -573,8 +573,8 @@ onUnmounted(() => {
 .social-btn {
   width: 56px;
   height: 56px;
-  border: 1px solid #e5e5e5;
-  background: white;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
   border-radius: 50%;
   display: flex;
   align-items: center;
